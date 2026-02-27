@@ -1,10 +1,10 @@
 "use client";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "../../components/DashboardLayout";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { uploadBatch } from "@/api/batch";
-import { BatchFileInput } from "@/components/BatchFileInput";
-import { useBatchProgress } from "@/hooks/useBatchProgress";
+import { uploadBatch } from "../../api/batch";
+import { BatchFileInput } from "../../components/BatchFileInput";
+import { useBatchProgress } from "../../hooks/useBatchProgress";
 
 export default function UploadProtocolPage() {
     const [files, setFiles] = useState({});
@@ -96,27 +96,27 @@ export default function UploadProtocolPage() {
                                 <div className="flex items-center gap-4 w-full">
                                     <div className="flex flex-col gap-1 w-1/2">
                                         <label className="font-mono text-[10px] uppercase font-bold text-ink/60" htmlFor="start-index">Start Lead Row</label>
-                                        <input 
-                                            id="start-index" 
-                                            type="number" 
+                                        <input
+                                            id="start-index"
+                                            type="number"
                                             min="0"
                                             className="w-full bg-paper border-[2px] border-ink p-2 font-mono text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
-                                            placeholder="e.g. 0" 
-                                            value={startIndex} 
-                                            onChange={(e) => setStartIndex(e.target.value)} 
+                                            placeholder="e.g. 0"
+                                            value={startIndex}
+                                            onChange={(e) => setStartIndex(e.target.value)}
                                             disabled={uploadStatus === 'uploading' || uploadStatus === 'success'}
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1 w-1/2">
                                         <label className="font-mono text-[10px] uppercase font-bold text-ink/60" htmlFor="end-index">End Lead Row</label>
-                                        <input 
-                                            id="end-index" 
-                                            type="number" 
+                                        <input
+                                            id="end-index"
+                                            type="number"
                                             min="1"
                                             className="w-full bg-paper border-[2px] border-ink p-2 font-mono text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
-                                            placeholder="e.g. 10" 
-                                            value={endIndex} 
-                                            onChange={(e) => setEndIndex(e.target.value)} 
+                                            placeholder="e.g. 10"
+                                            value={endIndex}
+                                            onChange={(e) => setEndIndex(e.target.value)}
                                             disabled={uploadStatus === 'uploading' || uploadStatus === 'success'}
                                         />
                                     </div>

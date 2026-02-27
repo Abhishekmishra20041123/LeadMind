@@ -1,8 +1,9 @@
 "use client";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "../../components/DashboardLayout";
 import { useState, useEffect, Suspense } from "react";
-import { fetchLeads } from "@/api/leads";
-import { LedgerTable } from "@/components/LedgerTable";
+import { fetchLeads } from "../../api/leads";
+import { LedgerTable } from "../../components/LedgerTable";
+import { useBatchProgress } from "../../hooks/useBatchProgress";
 import { useSearchParams } from "next/navigation";
 
 function LedgerView() {
@@ -16,8 +17,6 @@ function LedgerView() {
     const searchParams = useSearchParams();
     const batchId = searchParams.get('batch');
 
-    // Listen to real-time batch writes if a batch is active
-    const { useBatchProgress } = require("@/hooks/useBatchProgress");
     const progress = useBatchProgress(batchId);
 
     async function load(p, batchStr) {

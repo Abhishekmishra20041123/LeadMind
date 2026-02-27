@@ -1,0 +1,15 @@
+{
+    "batch_id": "BATCH_2026_02_27_A37889C9",
+    "status": "completed",
+    "percent": 100,
+    "processed_count": 6,
+    "total_count": 6,
+    "agents": {
+        "research": "completed",
+        "intent": "completed",
+        "message": "completed",
+        "timing": "completed",
+        "logger": "completed"
+    },
+    "message": "Processing subset of 6 leads (rows 0 to 5)"
+}

@@ -1,8 +1,8 @@
 "use client";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "../../components/DashboardLayout";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useBatchProgress } from "@/hooks/useBatchProgress";
+import { useBatchProgress } from "../../hooks/useBatchProgress";
 
 function AgentMonitorView() {
     const searchParams = useSearchParams();

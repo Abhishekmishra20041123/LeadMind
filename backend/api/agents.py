@@ -24,6 +24,7 @@ class OllamaWrapper:
             "stream": False
         }
         headers = {"Content-Type": "application/json"}
+        res = None
         try:
             res = requests.post(url, json=payload, headers=headers, timeout=120)
             res.raise_for_status()

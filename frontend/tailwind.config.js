@@ -16,10 +16,13 @@ module.exports = {
                 "paper": "#FFFFFF", // Paper White
                 "mute": "#F0F0F0", // Concrete Grey
                 "data-green": "#00CC66", // Data Green
+                "background-light": "#ffffff",
+                "background-dark": "#0a0a0a",
             },
             fontFamily: {
                 "display": ["Space Grotesk", "sans-serif"],
                 "body": ["Inter Tight", "sans-serif"],
+                "sans": ["Inter Tight", "sans-serif"],
                 "mono": ["JetBrains Mono", "monospace"],
             },
             borderRadius: {

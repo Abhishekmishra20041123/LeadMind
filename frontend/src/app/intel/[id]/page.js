@@ -1,5 +1,5 @@
 "use client";
-import DashboardLayout from "@/components/DashboardLayout";
+import DashboardLayout from "../../../components/DashboardLayout";
 import { useState, useEffect, use } from "react";
 // Since this is a detail page, it requires the dynamic ID from the URL.
 

@@ -1,124 +1,439 @@
 "use client";
 import DashboardLayout from "../../components/DashboardLayout";
+import { useState, useEffect } from "react";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 export default function SettingsPage() {
-    return (
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState("PROFILE");
+    const [toastMessage, setToastMessage] = useState(null);
+
+    // Auth Modal State
+    const [isUnlocked, setIsUnlocked] = useState(false);
+    const [unlockPassword, setUnlockPassword] = useState("");
+    const [unlocking, setUnlocking] = useState(false);
+    const [unlockError, setUnlockError] = useState("");
+
+    // Form inputs state
+    const [formData, setFormData] = useState({
+        company_name: "",
+        company_website_url: "",
+        country: "",
+        contact_person_name: "",
+        email: "",
+        phone_number: "",
+        password: "",
+        confirm_password: "",
+        api_key: "",
+        settings: {
+            smtp_host: "",
+            smtp_port: "",
+            smtp_user: "",
+            smtp_pass: ""
+        }
+    });
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const res = await fetch(`${API}/auth/me`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setProfile(data);
+                    setFormData({
+                        company_name: data.company_name || "",
+                        company_website_url: data.company_website_url || "",
+                        country: data.country || "",
+                        contact_person_name: data.contact_person_name || "",
+                        email: data.email || "",
+                        phone_number: data.phone_number || "",
+                        password: "", // never populate password
+                        confirm_password: "",
+                        api_key: data.api_key || "",
+                        settings: {
+                            smtp_host: data.settings?.smtp_host || "",
+                            smtp_port: data.settings?.smtp_port || "",
+                            smtp_user: data.settings?.smtp_user || "",
+                            smtp_pass: data.settings?.smtp_pass || ""
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load profile", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProfile();
+    }, []);
+
+    const showToast = (message, isError = false) => {
+        setToastMessage({ text: message, isError });
+        setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    const handleSave = async (e) => {
+        e.preventDefault();
+
+        // If they are trying to update the password...
+        if (formData.password || formData.confirm_password) {
+            if (formData.password !== formData.confirm_password) {
+                showToast("ERROR: SECURITY KEYS DO NOT MATCH.", true);
+                return;
+            }
+        }
+
+        setSaving(true);
+        try {
+            const payload = {
+                company_name: formData.company_name,
+                company_website_url: formData.company_website_url,
+                country: formData.country,
+                contact_person_name: formData.contact_person_name,
+                email: formData.email,
+                phone_number: formData.phone_number,
+                api_key: formData.api_key,
+                settings: formData.settings
+            };
+            if (formData.password) {
+                payload.password = formData.password;
+            }
+
+            const res = await fetch(`${API}/auth/settings`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+                },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                showToast("CONFIGURATION SAVED SUCCESSFULLY.");
+                setFormData(prev => ({ ...prev, password: "", confirm_password: "" })); // clear password fields
+            } else {
+                showToast("SAVE FAILED. CHECK SYSTEM LOGS.", true);
+            }
+        } catch (error) {
+            showToast(`ERROR: ${error.message}`, true);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        if (name.startsWith("settings.")) {
+            const field = name.split(".")[1];
+            setFormData(prev => ({
+                ...prev,
+                settings: { ...prev.settings, [field]: value }
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    if (loading) return (
         <DashboardLayout>
-            <div className="animate-in fade-in zoom-in duration-500 max-w-5xl mx-auto">
-                {/* Header */}
-                <div className="mb-8 flex items-end justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Settings</h1>
-                        <p className="font-mono text-xs text-[var(--text-muted)] tracking-widest uppercase">
-                            System Configuration // v2.4.0
-                        </p>
+            <div className="flex h-full items-center justify-center bg-paper text-ink font-mono uppercase tracking-widest animate-pulse">
+                INITIALIZING SYSTEM SETTINGS...
+            </div>
+        </DashboardLayout>
+    );
+
+    const handleUnlock = async (e) => {
+        e.preventDefault();
+        setUnlocking(true);
+        setUnlockError("");
+        try {
+            const res = await fetch(`${API}/auth/signin`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: profile.email, password: unlockPassword })
+            });
+            if (res.ok) {
+                setIsUnlocked(true);
+            } else {
+                setUnlockError("INVALID SECURITY KEY.");
+            }
+        } catch (error) {
+            setUnlockError("AUTHENTICATION FAILED.");
+        } finally {
+            setUnlocking(false);
+            setUnlockPassword("");
+        }
+    };
+
+    if (!isUnlocked && profile) {
+        return (
+            <DashboardLayout>
+                <div className="flex h-full items-center justify-center bg-grid-pattern relative p-8" style={{ backgroundColor: "#F9F9F9" }}>
+                    <div className="w-full max-w-md bg-paper border-2 border-ink shadow-[8px_8px_0px_0px_rgba(10,10,10,1)] p-8 animate-in zoom-in-95 duration-500">
+                        <div className="flex flex-col items-center text-center space-y-4 mb-8">
+                            <div className="w-16 h-16 bg-primary flex items-center justify-center border-2 border-ink shadow-[4px_4px_0px_0px_rgba(10,10,10,1)]">
+                                <span className="material-symbols-outlined text-paper text-3xl">lock</span>
+                            </div>
+                            <div>
+                                <h1 className="font-display font-bold text-2xl text-ink uppercase tracking-tight">System Locked</h1>
+                                <p className="font-mono text-xs text-ink/60 uppercase mt-2 tracking-widest leading-relaxed">
+                                    Authentication required to access and modify system configuration parameters.
+                                </p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleUnlock} className="space-y-6">
+                            {unlockError && (
+                                <div className="p-3 bg-red-50 border-2 border-red-500 text-red-500 font-mono text-xs font-bold uppercase tracking-widest text-center">
+                                    {unlockError}
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">Operator Security Key</label>
+                                <input
+                                    type="password"
+                                    value={unlockPassword}
+                                    onChange={(e) => setUnlockPassword(e.target.value)}
+                                    placeholder="Enter your login password"
+                                    className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                                    autoFocus
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={unlocking || !unlockPassword}
+                                className="w-full py-4 bg-primary text-paper font-bold font-mono text-sm uppercase tracking-widest border-2 border-ink shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-50 disabled:cursor-wait">
+                                {unlocking ? 'AUTHENTICATING...' : 'AUTHORIZE ACCESS'}
+                            </button>
+                        </form>
                     </div>
                 </div>
+            </DashboardLayout>
+        );
+    }
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* API Config */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm hover:border-[var(--border-accent)] transition-colors">
-                        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-surface)]">
-                            <h2 className="text-sm font-semibold text-white tracking-wide">API CONFIGURATION</h2>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div>
-                                <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                                    Backend URL
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        className="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-all font-mono"
-                                        defaultValue="http://localhost:8000"
-                                        readOnly
-                                    />
-                                    <span className="material-icons-outlined absolute right-3 top-3 text-[var(--green)] text-lg">check_circle</span>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-                                    Gemini API Key
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        className="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-all font-mono tracking-widest"
-                                        type="password"
-                                        defaultValue="sk-••••••••••••••••••••••••••"
-                                        readOnly
-                                    />
-                                    <div className="absolute right-3 top-2.5 px-2 py-0.5 bg-[var(--bg-elevated)] rounded text-[10px] text-[var(--text-muted)] border border-[var(--border)]">
-                                        HIDDEN
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    const getInitials = (name) => {
+        if (!name) return "XX";
+        return name.substring(0, 2).toUpperCase();
+    };
+
+    const tabs = ["PROFILE", "CONTACTS", "SECURITY", "INTEGRATIONS"];
+
+    const InputField = ({ label, name, type = "text", value, placeholder, isReadOnly = false }) => (
+        <div className="flex flex-col gap-2">
+            <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">{label}</label>
+            <input
+                type={type}
+                name={name}
+                value={value}
+                onChange={handleInputChange}
+                readOnly={isReadOnly}
+                placeholder={placeholder}
+                className={`w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors ${isReadOnly ? 'opacity-70 cursor-not-allowed' : ''}`}
+            />
+        </div>
+    );
+
+    return (
+        <DashboardLayout>
+            <div className="flex flex-col h-full relative bg-grid-pattern overflow-x-hidden p-8" style={{ backgroundColor: "#F9F9F9" }}>
+                {/* TOAST SYSTEM */}
+                {toastMessage && (
+                    <div className={`fixed top-4 right-4 z-50 px-6 py-4 border-2 ${toastMessage.isError ? 'border-red-500 bg-red-50' : 'border-ink bg-primary text-white'} shadow-[8px_8px_0px_0px_rgba(10,10,10,1)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in`}>
+                        <span className="material-symbols-outlined text-xl">
+                            {toastMessage.isError ? 'error' : 'task_alt'}
+                        </span>
+                        <span className="font-mono text-xs font-bold uppercase tracking-widest">
+                            {toastMessage.text}
+                        </span>
                     </div>
+                )}
 
-                    {/* System Info */}
-                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm hover:border-[var(--border-accent)] transition-colors">
-                        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-surface)]">
-                            <h2 className="text-sm font-semibold text-white tracking-wide">SYSTEM INFO</h2>
+                <div className="max-w-5xl mx-auto w-full bg-paper border-2 border-ink shadow-[12px_12px_0px_0px_rgba(10,10,10,1)]">
+                    {/* HEADER BLOCK */}
+                    <header className="px-8 py-8 border-b-2 border-ink bg-paper z-10">
+                        <div className="flex flex-col gap-2">
+                            <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration // v2.4.0</span>
+                            <h1 className="font-display font-bold text-4xl tracking-tight text-ink uppercase">Settings</h1>
                         </div>
-                        <div className="divide-y divide-[var(--border-subtle)]">
-                            {[
-                                { label: "Version", value: "v2.4.0 [STABLE]" },
-                                { label: "Agents Online", value: "5 Workers", color: "text-[var(--green)]" },
-                                { label: "LLM Provider", value: "Google Gemini 1.5 Pro" },
-                                { label: "Orchestration", value: "LangGraph" },
-                                { label: "Frontend Build", value: "Next.js 15 (Turbopack)" },
-                            ].map((item, i) => (
-                                <div key={i} className="flex justify-between items-center px-6 py-4 hover:bg-[var(--bg-hover)] transition-colors">
-                                    <span className="text-sm text-[var(--text-secondary)] font-medium">{item.label}</span>
-                                    <span className={`font-mono text-xs ${item.color || "text-[var(--text-primary)]"}`}>{item.value}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    </header>
 
-                    {/* Data Sources */}
-                    <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm hover:border-[var(--border-accent)] transition-colors">
-                        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-surface)] flex justify-between items-center">
-                            <h2 className="text-sm font-semibold text-white tracking-wide">DATA SOURCES</h2>
-                            <span className="text-xs text-[var(--text-muted)] bg-[var(--bg-base)] px-2 py-1 rounded border border-[var(--border)]">
-                                AUTO-SYNC ON
-                            </span>
-                        </div>
-                        <div className="divide-y divide-[var(--border-subtle)]">
-                            {[
-                                { file: "Leads_Data.csv", desc: "Primary lead database", size: "2.4 MB", updated: "2h ago" },
-                                { file: "Sales_Pipeline.csv", desc: "Sales pipeline deals", size: "1.1 MB", updated: "5m ago" },
-                                { file: "Email_Logs.csv", desc: "Historical email interactions", size: "15.8 MB", updated: "1d ago" },
-                                { file: "CRM_Pipeline.csv", desc: "CRM pipeline data", size: "890 KB", updated: "12m ago" },
-                                { file: "Agent_Mapping.csv", desc: "Sales agent assignments", size: "12 KB", updated: "3d ago" },
-                            ].map((ds, i) => (
-                                <div key={i} className="flex items-center gap-4 px-6 py-4 hover:bg-[var(--bg-hover)] transition-colors group">
-                                    <div className="w-10 h-10 rounded-full bg-[var(--green-soft)] flex items-center justify-center shrink-0">
-                                        <span className="material-icons-outlined text-lg text-[var(--green)]">table_chart</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <div className="font-mono text-sm font-semibold text-[var(--text-primary)] truncate">{ds.file}</div>
-                                            <span className="material-icons-outlined text-[14px] text-[var(--green)]">verified</span>
+                    <div className="flex-1 overflow-visible px-8 py-8">
+                        <div>
+                            {/* TABS */}
+                            <div className="flex border-b-2 border-ink/20 mb-10 overflow-x-auto scroller-hide">
+                                {tabs.map(tab => (
+                                    <button
+                                        key={tab}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-8 py-4 font-mono text-sm font-bold tracking-widest transition-all whitespace-nowrap border-b-4 ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-ink/40 hover:text-ink/80 hover:bg-mute/50'}`}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* CONTENT AREA */}
+                            <form onSubmit={handleSave} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                                {activeTab === "PROFILE" && (
+                                    <div className="space-y-10">
+                                        <div className="flex items-center gap-6 pb-8 border-b-2 border-ink/10">
+                                            <div className="w-24 h-24 bg-ink flex items-center justify-center text-paper font-display text-4xl font-bold border-2 border-ink">
+                                                {getInitials(formData.company_name)}
+                                            </div>
+                                            <div>
+                                                <h2 className="font-display font-bold text-2xl text-ink uppercase">{formData.company_name || 'UNDEFINED PROTOCOL'}</h2>
+                                                <p className="font-mono text-xs text-ink/60 uppercase mt-1 tracking-widest">Primary Operational Entity</p>
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-[var(--text-muted)] truncate">{ds.desc}</div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <InputField label="Company Name" name="company_name" value={formData.company_name} placeholder="Acme Corp" />
+                                            <InputField label="Company Website URL" name="company_website_url" value={formData.company_website_url} placeholder="https://acme.com" />
+                                            <InputField label="Region / Country" name="country" value={formData.country} placeholder="United States" />
+                                        </div>
                                     </div>
-                                    <div className="text-right hidden sm:block">
-                                        <div className="font-mono text-xs text-[var(--text-secondary)]">{ds.size}</div>
-                                        <div className="text-[10px] text-[var(--text-muted)]">Synced {ds.updated}</div>
+                                )}
+
+                                {activeTab === "CONTACTS" && (
+                                    <div className="space-y-10">
+                                        <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-primary pl-4 text-ink">Primary Operator Details</h2>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <InputField label="Contact Person Name" name="contact_person_name" value={formData.contact_person_name} placeholder="Jane Doe" />
+                                            <InputField label="Email Address" name="email" value={formData.email} placeholder="jane@acme.com" />
+                                            <InputField label="Phone Number" name="phone_number" value={formData.phone_number} placeholder="+1 (555) 012-3456" />
+                                        </div>
                                     </div>
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button className="p-2 hover:bg-[var(--bg-elevated)] rounded-full text-[var(--text-muted)] hover:text-white transition-colors">
-                                            <span className="material-icons-outlined text-lg">more_vert</span>
-                                        </button>
+                                )}
+
+                                {activeTab === "SECURITY" && (
+                                    <div className="space-y-10">
+                                        <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-red-500 pl-4 text-ink">Access Credentials</h2>
+                                        <div className="p-6 border-2 border-ink bg-mute/50 mb-8 max-w-lg">
+                                            <p className="font-mono text-xs text-ink/80 leading-relaxed uppercase">
+                                                UPDATING YOUR SECURITY KEY WILL TERMINATE ALL ACTIVE SESSIONS. YOU WILL BE REQUIRED TO RE-AUTHENTICATE ON YOUR NEXT LOGIN.
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <InputField type="password" label="New Security Key" name="password" value={formData.password} placeholder="Leave blank to keep unchanged" />
+                                            <InputField type="password" label="Confirm Security Key" name="confirm_password" value={formData.confirm_password} placeholder="Re-enter new security key" />
+                                        </div>
                                     </div>
+                                )}
+
+                                {activeTab === "INTEGRATIONS" && (
+                                    <div className="space-y-12">
+                                        {/* Backend */}
+                                        <div>
+                                            <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-data-green pl-4 text-ink">System Endpoints</h2>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                <InputField label="Backend URL" name="backend_url" value={API} isReadOnly={true} />
+                                                <InputField type="password" label="Gemini API Key" name="api_key" value={formData.api_key} placeholder="sk-..." />
+                                            </div>
+                                        </div>
+
+                                        {/* SMTP */}
+                                        <div className="pt-8 border-t-2 border-ink/10">
+                                            <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-primary pl-4 text-ink">SMTP Gateway</h2>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Server Host</label>
+                                                    <input
+                                                        type="text"
+                                                        name="settings.smtp_host"
+                                                        value={formData.settings.smtp_host}
+                                                        onChange={handleInputChange}
+                                                        placeholder="smtp.gmail.com"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Port</label>
+                                                    <input
+                                                        type="number"
+                                                        name="settings.smtp_port"
+                                                        value={formData.settings.smtp_port}
+                                                        onChange={handleInputChange}
+                                                        placeholder="587"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Username</label>
+                                                    <input
+                                                        type="text"
+                                                        name="settings.smtp_user"
+                                                        value={formData.settings.smtp_user}
+                                                        onChange={handleInputChange}
+                                                        placeholder="user@example.com"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Password</label>
+                                                    <input
+                                                        type="password"
+                                                        name="settings.smtp_pass"
+                                                        value={formData.settings.smtp_pass}
+                                                        onChange={handleInputChange}
+                                                        placeholder="App Password"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Data Sources (Read-Only Status display) */}
+                                        <div className="pt-8 border-t-2 border-ink/10">
+                                            <div className="flex justify-between items-end mb-6">
+                                                <h2 className="font-mono font-bold text-xl uppercase tracking-widest border-l-4 border-ink pl-4 text-ink">Active Data Bridges</h2>
+                                                <span className="text-[10px] font-mono font-bold uppercase tracking-widest bg-ink text-paper px-3 py-1">AUTO-SYNC ON</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-4">
+                                                {[
+                                                    { id: "companies_collection", desc: "Multi-tenant tenant profiles" },
+                                                    { id: "leads_collection", desc: "Primary B2B contact database" },
+                                                    { id: "agent_activity_collection", desc: "LangGraph agent execution logs" }
+                                                ].map((ds) => (
+                                                    <div key={ds.id} className="flex justify-between items-center p-4 border-2 border-ink bg-paper hover:bg-mute transition-colors group cursor-default">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-8 h-8 bg-data-green/20 border-2 border-data-green flex items-center justify-center shrink-0">
+                                                                <span className="material-symbols-outlined text-sm text-data-green">database</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-mono text-sm font-bold text-ink">{ds.id}</p>
+                                                                <p className="font-mono text-[10px] text-ink/60 uppercase tracking-widest mt-0.5">{ds.desc}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-data-green animate-pulse"></span>
+                                                            <span className="font-mono text-xs font-bold text-data-green uppercase tracking-widest">LIVE</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* GLOBAL ACTION BAR */}
+                                <div className="mt-12 pt-8 border-t-2 border-ink flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={saving}
+                                        className="px-8 py-4 bg-primary text-paper font-bold font-mono text-sm uppercase tracking-widest border-2 border-ink shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-50 disabled:cursor-wait">
+                                        {saving ? 'UPDATING SYSTEMS...' : 'SAVE CONFIGURATION'}
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
-                        <div className="p-4 bg-[var(--bg-surface)] border-t border-[var(--border)] text-center">
-                            <button className="text-xs font-medium text-[var(--accent)] hover:text-white transition-colors flex items-center justify-center gap-2 w-full">
-                                <span className="material-icons-outlined text-sm">add_circle</span>
-                                CONNECT NEW DATA SOURCE
-                            </button>
+                            </form>
                         </div>
                     </div>
                 </div>

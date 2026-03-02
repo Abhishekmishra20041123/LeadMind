@@ -1,12 +1,28 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+
 from api.dashboard import router as dashboard_router
 from api.leads import router as leads_router
 from api.agents import router as agents_router
 from api.batch import router as batch_router
 from api.auth import router as auth_router
+from db import create_indexes
+from services.scheduler import scheduler_loop
+import asyncio
 
-app = FastAPI(title="Strategic Grid API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize MongoDB Indexes on startup
+    await create_indexes()
+    
+    # Start background scheduler poll
+    scheduler_task = asyncio.create_task(scheduler_loop())
+    
+    yield
+    scheduler_task.cancel()
+
+app = FastAPI(title="Strategic Grid API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

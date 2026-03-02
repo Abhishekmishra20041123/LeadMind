@@ -2,11 +2,13 @@ import sys
 import os
 import json
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 import requests
+from dependencies import get_current_user
+from db import leads_collection, email_logs_collection, agent_activity_collection
 
 class OllamaResponse:
     def __init__(self, text):
@@ -348,3 +350,107 @@ def run_agent(agent_id: str, request: AgentRunRequest):
         "timestamp": _agent_status[agent_id]["last_run"],
         "result": result,
     }
+
+from langgraph_nodes.email_strategy_node import create_email_strategy_graph
+from prompts.email_strategy_prompts import email_strategy_prompts
+import asyncio
+
+@router.post("/regenerate/{lead_id}/{node}")
+async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user)):
+    """Re-run a specific LangGraph node for a lead."""
+    valid_nodes = ["email_strategy"] # Expandable to 'intent', 'timing', etc.
+    if node not in valid_nodes:
+        raise HTTPException(status_code=400, detail=f"Invalid node. Must be one of {valid_nodes}")
+        
+    company_id = user["company_id"]
+    lead = await leads_collection.find_one({"lead_id": lead_id, "company_id": company_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    # Fetch operator (company) info from companies_collection
+    from db import companies_collection
+    from bson import ObjectId
+    
+    try:
+        company_data = await companies_collection.find_one({"_id": ObjectId(company_id)})
+    except Exception:
+        company_data = None
+        
+    # if not dict-like, default
+    if not company_data:
+        company_data = {}
+        
+    operator_info = {
+        "operator_name": company_data.get("contact_person_name", "[Your Name]"),
+        "operator_company": company_data.get("company_name", "Our Company"),
+        "operator_website": company_data.get("company_website_url", "")
+    }
+        
+    try:
+        # Load LLM
+        llm = OllamaWrapper('minimax-m2.5:cloud')
+        
+        # Build State
+        state = {
+            "lead": {
+                "name": lead.get("profile", {}).get("name", ""),
+                "company": lead.get("profile", {}).get("company", ""),
+                "title": lead.get("profile", {}).get("title", ""),
+                "region": lead.get("profile", {}).get("region", ""),
+                "visits": lead.get("activity", {}).get("visits", 0),
+                "intent_score": lead.get("intel", {}).get("intent_score", 0),
+            },
+            "operator_info": operator_info,
+            "email_history": [],
+            # Inject existing state so the node has context
+            "key_signals": lead.get("intel", {}).get("key_signals", [])
+        }
+        
+        # Construct graph for the requested node
+        if node == "email_strategy":
+            graph = create_email_strategy_graph(llm, email_strategy_prompts)
+            
+        print(f"\\n[Regenerate] Running {node} for Lead {lead_id}...")
+        
+        # Run node synchronously in a thread
+        def run_node(graph, state):
+            return graph.invoke(state)
+            
+        new_state = await asyncio.to_thread(run_node, graph, state)
+        
+        # Map output to updates
+        update_data = {}
+        if node == "email_strategy":
+            update_data["intel.email.subject"] = new_state.get("subject", "")
+            update_data["intel.email.preview"] = new_state.get("email_preview", "")
+            update_data["intel.email.personalization_factors"] = new_state.get("personalization_factors", [])
+            
+        from datetime import datetime
+        now = datetime.utcnow()
+        update_data["updated_at"] = now
+        
+        # Save back to MongoDB
+        await leads_collection.update_one(
+            {"lead_id": lead_id, "company_id": company_id},
+            {"$set": update_data}
+        )
+        
+        # Log to activity
+        await agent_activity_collection.insert_one({
+            "company_id": company_id,
+            "batch_id": lead.get("batch_id"),
+            "lead_id": lead_id,
+            "agent": node.upper(),
+            "action": "Regenerated content via manual trigger",
+            "status": "SUCCESS",
+            "timestamp": now
+        })
+        
+        return {
+            "status": "success",
+            "subject": update_data.get("intel.email.subject"),
+            "draft": update_data.get("intel.email.preview")
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Regeneration failed: {str(e)}")

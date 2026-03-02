@@ -12,7 +12,10 @@ export function useBatchProgress(batchId) {
 
         async function poll() {
             try {
-                const res = await fetch(`${API}/batch/${batchId}/progress`);
+                const token = localStorage.getItem("access_token");
+                const res = await fetch(`${API}/batch/${batchId}/progress`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
                 if (!res.ok) {
                     if (res.status !== 404) console.error("Failed to fetch progress");
                     return;

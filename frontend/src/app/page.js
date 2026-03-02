@@ -1,27 +1,32 @@
 "use client";
 import DashboardLayout from "../components/DashboardLayout";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const API = "http://localhost:8000/api";
 
 export default function MissionControl() {
+    const router = useRouter();
     const [stats, setStats] = useState(null);
     const [targets, setTargets] = useState([]);
     const [activities, setActivities] = useState([]);
     const [pipeline, setPipeline] = useState([]);
 
     useEffect(() => {
-        fetch(`${API}/dashboard/stats`).then(r => r.json()).then(setStats).catch(() => { });
-        fetch(`${API}/dashboard/priority-targets`).then(r => r.json()).then(d => setTargets(d.targets || [])).catch(() => { });
-        fetch(`${API}/dashboard/activity`).then(r => r.json()).then(d => setActivities(d.activities || [])).catch(() => { });
-        fetch(`${API}/dashboard/pipeline`).then(r => r.json()).then(d => setPipeline(d.stages || [])).catch(() => { });
+        const token = localStorage.getItem("access_token");
+        const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+
+        fetch(`${API}/dashboard/stats`, { headers }).then(r => r.json()).then(setStats).catch(() => { });
+        fetch(`${API}/dashboard/priority-targets`, { headers }).then(r => r.json()).then(d => setTargets(d.targets || [])).catch(() => { });
+        fetch(`${API}/dashboard/activity`, { headers }).then(r => r.json()).then(d => setActivities(d.activities || [])).catch(() => { });
+        fetch(`${API}/dashboard/pipeline`, { headers }).then(r => r.json()).then(d => setPipeline(d.stages || [])).catch(() => { });
     }, []);
 
     const kpis = [
-        { label: "Total Leads", value: stats?.total_leads?.toLocaleString() || "1,248", icon: "groups", trend: "12%", trendUp: true, subtext: "vs last week", color: "text-ink/60", valueColor: "text-ink" },
-        { label: "High Intent", value: "14", icon: "local_fire_department", trend: "4 new", trendUp: true, subtext: "since login", color: "text-primary", valueColor: "text-primary" },
-        { label: "Pipeline Value", value: stats ? `$${(stats.pipeline_value / 1e6).toFixed(1)}M` : "$4.2M", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
-        { label: "Avg Score", value: "78%", icon: "analytics", bar: 78, color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Total Leads", value: stats?.total_leads?.toLocaleString() || "0", icon: "groups", trend: "0%", trendUp: true, subtext: "vs last week", color: "text-ink/60", valueColor: "text-ink" },
+        { label: "High Intent", value: stats?.high_intent || "0", icon: "local_fire_department", trend: "0 new", trendUp: true, subtext: "since login", color: "text-primary", valueColor: "text-primary" },
+        { label: "Pipeline Value", value: stats ? `$${(stats.pipeline_value / 1e6).toFixed(1)}M` : "$0M", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Avg Score", value: `${stats?.avg_score || 0}%`, icon: "analytics", bar: parseInt(stats?.avg_score || 0), color: "text-ink/60", valueColor: "text-ink" },
     ];
 
     function timeAgo(ts) {
@@ -33,21 +38,7 @@ export default function MissionControl() {
         return `${Math.floor(diff / 86400)}d ago`;
     }
 
-    // Use dummy data if api fails to load targets for visual presentation based on design
-    const displayTargets = targets.length > 0 ? targets : [
-        { name: "Marcus Thorne", title: "CTO", company: "Nexus Dynamics", score: 92, signal: "Viewed pricing page 4x in last 24h", tags: ["Enterprise", "Decision Maker"], type: "Hot Lead" },
-        { name: "Elena Rodriguez", title: "VP Sales", company: "Global Logistics", score: 88, signal: "Downloaded Q3 whitepaper", tags: ["Mid-Market"] },
-        { name: "David Chen", title: "Director", company: "FinTech Sol.", score: 85, signal: "LinkedIn connection accepted", tags: ["Rapid Growth"] }
-    ];
 
-    // Convert activities to match the design's structured format if we have API data, else use mock
-    const displayActivities = activities.length > 0 ? activities : [
-        { agent: "RESEARCH_AGENT", time: "10:42:01", text: "Completed deep dive for Nexus Dynamics. Found 3 new news articles regarding Series B funding.", status: "success" },
-        { agent: "INTENT_AGENT", time: "10:38:45", text: "High intent signal detected for Marcus Thorne. Intent score spiked +15 pts.", status: "warning" },
-        { agent: "EMAIL_STRATEGY", time: "10:35:12", text: "Drafted outreach sequence for Global Logistics based on recent earnings report.", status: "success" },
-        { agent: "SYSTEM", time: "10:30:00", text: "Batch upload processed. 15 new leads added to The Ledger.", status: "neutral" },
-        { agent: "TIMING_AGENT", time: "10:15:22", text: "Scheduled follow-up for David Chen. Optimal window: Tuesday 14:00.", status: "success" },
-    ];
 
     return (
         <DashboardLayout>
@@ -62,7 +53,7 @@ export default function MissionControl() {
                         <span className="material-symbols-outlined text-[16px]">refresh</span>
                         Refresh Data
                     </button>
-                    <button className="h-10 px-6 bg-primary text-white font-mono text-xs uppercase font-bold hover:bg-ink transition-colors flex items-center gap-2">
+                    <button onClick={() => router.push('/upload')} className="h-10 px-6 bg-primary text-white font-mono text-xs uppercase font-bold hover:bg-ink transition-colors flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px]">add</span>
                         New Campaign
                     </button>
@@ -109,10 +100,12 @@ export default function MissionControl() {
                             <a className="font-mono text-xs uppercase underline hover:text-primary" href="/ledger">View Full Ledger</a>
                         </div>
                         <div className="flex flex-col gap-4">
-                            {displayTargets.map((t, i) => (
+                            {targets.map((t, i) => (
                                 <div key={i} className="bg-paper border border-ink p-0 flex flex-col sm:flex-row group hover:shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] transition-all cursor-pointer">
                                     <div className="w-full sm:w-48 h-48 sm:h-auto border-b sm:border-b-0 sm:border-r border-ink relative overflow-hidden shrink-0 bg-mute flex text-ink/30 items-center justify-center">
-                                        <span className="material-symbols-outlined text-[64px] group-hover:scale-110 transition-transform">person</span>
+                                        <span className="font-display font-bold text-[64px] group-hover:scale-110 transition-transform">
+                                            {t.name ? t.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : ""}
+                                        </span>
                                         {t.type && (
                                             <div className="absolute top-2 left-2 bg-primary text-white font-mono text-[10px] px-2 py-0.5 font-bold uppercase">{t.type}</div>
                                         )}
@@ -135,7 +128,7 @@ export default function MissionControl() {
                                         </div>
                                         <div className="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 pt-4 border-t border-dashed border-ink/30">
                                             <p className="text-sm font-medium">Recent Signal: <span className="font-normal text-ink/70">{t.signal}</span></p>
-                                            <a href={`/intel/${t.index}`} className="px-6 py-2 border border-ink font-mono text-xs uppercase font-bold hover:bg-ink hover:text-white transition-colors flex items-center justify-center gap-2 shrink-0">
+                                            <a href={`/intel/${t.id}`} className="px-6 py-2 border border-ink font-mono text-xs uppercase font-bold hover:bg-ink hover:text-white transition-colors flex items-center justify-center gap-2 shrink-0">
                                                 Review Intel <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                                             </a>
                                         </div>
@@ -145,34 +138,34 @@ export default function MissionControl() {
                         </div>
                     </div>
 
-                    {/* The Feed (Right 4 Cols) */}
+                    {/* Active Agents (Right 4 Cols) */}
                     <div className="col-span-12 lg:col-span-4 flex flex-col h-full">
                         <div className="flex justify-between items-end border-b-3 border-ink pb-2 mb-6">
-                            <h3 className="font-display text-2xl font-bold uppercase">Agent Activity</h3>
+                            <h3 className="font-display text-2xl font-bold uppercase">Active Agents</h3>
                             <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                                <span className="font-mono text-xs uppercase">Live</span>
+                                <span className="w-2 h-2 bg-data-green animate-pulse"></span>
+                                <span className="font-mono text-xs uppercase">Online</span>
                             </div>
                         </div>
-                        <div className="bg-ink text-paper p-4 font-mono text-xs uppercase border-b border-white/20">
-                            Log Stream // ID: 8821-X
-                        </div>
-                        <div className="bg-paper border-l border-r border-b border-ink flex-1 overflow-y-auto max-h-[600px] shadow-[4px_4px_0px_0px_rgba(10,10,10,0.1)]">
-                            {displayActivities.map((a, i) => (
-                                <div key={i} className="p-4 border-b border-ink/10 flex gap-3 hover:bg-mute transition-colors">
-                                    <div className="mt-1">
-                                        {a.color ? (
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }}></div>
-                                        ) : (
-                                            <div className={`w-2 h-2 rounded-full ${a.status === 'success' ? 'bg-data-green' : a.status === 'warning' ? 'bg-primary animate-pulse' : 'bg-ink/30'}`}></div>
-                                        )}
+
+                        <div className="flex flex-col gap-4">
+                            {[
+                                { name: "Web Researcher", icon: "travel_explore", desc: "Scrapes SEC filings, news, and LinkedIn for deep company intel.", color: "text-blue-600" },
+                                { name: "Intent Qualifier", icon: "target", desc: "Analyzes digital footprint to compute a 1-100 buying intent score.", color: "text-primary" },
+                                { name: "Email Strategist", icon: "mail", desc: "Drafts hyper-personalized outreach based on exact pain points.", color: "text-purple-600" },
+                                { name: "Timing Optimizer", icon: "schedule", desc: "Predicts the highest-probability day & time for response.", color: "text-orange-500" },
+                                { name: "CRM Logger", icon: "database", desc: "Serializes LangGraph context into structured JSON for MongoDB.", color: "text-data-green" }
+                            ].map((agent, i) => (
+                                <div key={i} className="bg-paper border border-ink p-4 flex gap-4 group hover:bg-mute transition-all hover:shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:-translate-y-1">
+                                    <div className="w-12 h-12 bg-ink text-paper flex items-center justify-center shrink-0">
+                                        <span className={`material-symbols-outlined text-[24px]`}>{agent.icon}</span>
                                     </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between mb-1">
-                                            <span className="font-bold text-ink">{a.agent}</span>
-                                            <span className="text-ink/50">{a.time || timeAgo(a.timestamp)}</span>
+                                    <div className="flex flex-col justify-center">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h4 className="font-display font-bold text-lg leading-none">{agent.name}</h4>
+                                            <span className={`material-symbols-outlined text-[14px] ${agent.color}`}>verified</span>
                                         </div>
-                                        <p className="text-sm normal-case font-body text-ink/80">{a.text || a.action}</p>
+                                        <p className="font-mono text-xs text-ink/70 leading-snug">{agent.desc}</p>
                                     </div>
                                 </div>
                             ))}

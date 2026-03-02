@@ -1,60 +1,18 @@
 import os
-import pandas as pd
+import re
+from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, Depends
+import pymongo
+from bson import ObjectId
+
+from db import leads_collection, agent_activity_collection
+from dependencies import get_current_user
 
 router = APIRouter()
 
-# Setup correct absolute paths
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-LEADS_CSV = os.path.join(DATA_DIR, "Leads_Data.csv")
-
-import json
-
-def _load_leads_df(batch_id: Optional[str] = None):
-    """Load the leads DataFrame from intel_db.json, optionally constrained to a specific batch."""
-    
-    intel_db_path = os.path.join(BASE_DIR, "outputs", "intel_db.json")
-    
-    if not os.path.exists(intel_db_path):
-        return pd.DataFrame()
-        
-    try:
-        with open(intel_db_path, "r") as f:
-            intel_data = json.load(f)
-            
-        leads_list = []
-        for lead_id, data in intel_data.items():
-            lead_info = data.get("lead", {})
-            
-            # Map the nested structure to a flat dictionary for the dataframe
-            flat_lead = {
-                "lead_id": lead_id,
-                "name": lead_info.get("name", "Unknown"),
-                "company": lead_info.get("company", "Unknown"),
-                "title": lead_info.get("title", "Unknown"),
-                "region": lead_info.get("region", "Unknown"),
-                "lead_source": lead_info.get("lead_source", "Unknown"),
-                "visits": lead_info.get("visits", 0),
-                "time_on_site": lead_info.get("time_on_site", 0.0),
-                "pages_per_visit": lead_info.get("pages_per_visit", 0.0),
-                "converted": lead_info.get("converted", False),
-                "intent_score": data.get("intent_score", 0),
-                "status": "Ready",
-                "record_id": lead_id
-            }
-            leads_list.append(flat_lead)
-            
-        df = pd.DataFrame(leads_list)
-        return df
-        
-    except Exception as e:
-        print(f"Error loading intel_db.json: {e}")
-        return pd.DataFrame()
-
 @router.get("")
-def list_leads(
+async def list_leads(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     search: Optional[str] = None,
@@ -63,41 +21,83 @@ def list_leads(
     sort_by: Optional[str] = None,
     sort_dir: str = Query("asc", regex="^(asc|desc)$"),
     batch_id: Optional[str] = None,
+    min_score: Optional[int] = None,
+    max_score: Optional[int] = None,
+    user=Depends(get_current_user)
 ):
-    """List leads with pagination, search, and filtering."""
-    df = _load_leads_df(batch_id)
-    
-    # 1) Search filter
+    query = {"company_id": user["company_id"]}
+    if batch_id:
+        query["batch_id"] = batch_id
+        
     if search:
-        search = search.lower()
-        search_mask = (
-            df['name'].str.lower().str.contains(search, na=False) |
-            df['company'].str.lower().str.contains(search, na=False) |
-            df['title'].str.lower().str.contains(search, na=False)
-        )
-        df = df[search_mask]
+        search_regex = {"$regex": re.escape(search), "$options": "i"}
+        search_or = [
+            {"profile.name": search_regex},
+            {"profile.company": search_regex},
+            {"profile.title": search_regex}
+        ]
         
-    # 2) Specific filters
+        try:
+            int_val = int(search)
+            search_or.append({"intel.intent_score": int_val})
+        except ValueError:
+            pass
+            
+        query["$or"] = search_or
+        
     if region:
-        df = df[df['region'].str.lower() == region.lower()]
+        query["profile.region"] = region
     if lead_source:
-        df = df[df['lead_source'].str.lower() == lead_source.lower()]
+        query["profile.lead_source"] = lead_source
         
-    # 3) Sorting
-    if sort_by and sort_by in df.columns:
-        ascending = sort_dir == "asc"
-        df = df.sort_values(by=sort_by, ascending=ascending)
+    if min_score is not None or max_score is not None:
+        score_query = {}
+        if min_score is not None:
+            score_query["$gte"] = min_score
+        if max_score is not None:
+            score_query["$lte"] = max_score
+        query["intel.intent_score"] = score_query
+
+    sort_criteria = []
+    if sort_by:
+        sort_field = sort_by
+        if sort_by in ["name", "company", "title", "region", "lead_source"]:
+            sort_field = f"profile.{sort_by}"
+        elif sort_by == "intent_score":
+            sort_field = "intel.intent_score"
+            
+        direction = pymongo.ASCENDING if sort_dir == "asc" else pymongo.DESCENDING
+        sort_criteria.append((sort_field, direction))
+    else:
+        sort_criteria.append(("_id", pymongo.ASCENDING))
+
+    skip = (page - 1) * page_size
+    
+    total = await leads_collection.count_documents(query)
+    cursor = leads_collection.find(query).sort(sort_criteria).skip(skip).limit(page_size)
+    leads = await cursor.to_list(length=page_size)
+    
+    leads_list = []
+    for lead_doc in leads:
+        profile = lead_doc.get("profile", {})
+        activity = lead_doc.get("activity", {})
+        flat_lead = {
+            "lead_id": lead_doc.get("lead_id"),
+            "name": profile.get("name", "Unknown"),
+            "company": profile.get("company", "Unknown"),
+            "title": profile.get("title", "Unknown"),
+            "region": profile.get("region", "Unknown"),
+            "lead_source": profile.get("lead_source", "Unknown"),
+            "visits": activity.get("visits", 0),
+            "time_on_site": activity.get("time_on_site", 0.0),
+            "pages_per_visit": activity.get("pages_per_visit", 0.0),
+            "converted": activity.get("converted", False),
+            "intent_score": lead_doc.get("intel", {}).get("intent_score", 0),
+            "status": lead_doc.get("status", "Unknown"),
+            "record_id": lead_doc.get("lead_id")
+        }
+        leads_list.append(flat_lead)
         
-    # 4) Pagination
-    total = len(df)
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    
-    paginated = df.iloc[start_idx:end_idx].copy()
-    paginated = paginated.where(pd.notnull(paginated), None)
-    
-    leads_list = paginated.to_dict(orient="records")
-    
     return {
         "data": leads_list,
         "total": total,
@@ -106,162 +106,124 @@ def list_leads(
     }
 
 @router.get("/stats")
-def lead_stats(batch_id: Optional[str] = None):
-    df = _load_leads_df(batch_id)
-    total_leads = len(df)
-    active_pursuits = len(df[df['status'].isin(['Analysis', 'Processing_'])])
+async def lead_stats(batch_id: Optional[str] = None, user=Depends(get_current_user)):
+    query = {"company_id": user["company_id"]}
+    if batch_id:
+        query["batch_id"] = batch_id
+        
+    pipeline = [
+        {"$match": query},
+        {"$facet": {
+            "total": [{"$count": "count"}],
+            "active": [{"$match": {"status": {"$in": ["Analysis", "Processing_"]}}}, {"$count": "count"}],
+            "ready": [{"$match": {"status": "Ready"}}, {"$count": "count"}],
+            "converted": [{"$match": {"activity.converted": True}}, {"$count": "count"}]
+        }}
+    ]
     
-    converted_mask = df['converted'] == True
-    conversion_rate = 0
-    if total_leads > 0:
-        conversion_rate = round((len(df[converted_mask]) / total_leads) * 100, 1)
+    result = await leads_collection.aggregate(pipeline).to_list(length=1)
+    stats = result[0]
+    
+    total_leads = stats["total"][0]["count"] if stats["total"] else 0
+    active_pursuits = stats["active"][0]["count"] if stats["active"] else 0
+    ready_leads = stats["ready"][0]["count"] if stats["ready"] else 0
+    converted_leads = stats["converted"][0]["count"] if stats["converted"] else 0
+    
+    conversion_rate = round((converted_leads / total_leads) * 100, 1) if total_leads > 0 else 0
         
     return {
         "total": total_leads,
         "active_pursuits": active_pursuits,
         "conversion_rate": conversion_rate,
-        "ready": len(df[df['status'] == 'Ready'])
+        "ready": ready_leads
     }
 
 @router.get("/filters")
-def lead_filters(batch_id: Optional[str] = None):
-    df = _load_leads_df(batch_id)
-    regions = df['region'].dropna().unique().tolist()
-    sources = df['lead_source'].dropna().unique().tolist()
-    # Filter out nan/None just in case
-    regions = [r for r in regions if r]
-    sources = [s for s in sources if s]
+async def lead_filters(batch_id: Optional[str] = None, user=Depends(get_current_user)):
+    query = {"company_id": user["company_id"]}
+    if batch_id:
+        query["batch_id"] = batch_id
+        
+    regions = await leads_collection.distinct("profile.region", query)
+    sources = await leads_collection.distinct("profile.lead_source", query)
     
     return {
-        "regions": sorted(regions),
-        "lead_sources": sorted(sources)
+        "regions": sorted([r for r in regions if r]),
+        "lead_sources": sorted([s for s in sources if s])
     }
 
 @router.get("/{record_id}")
-def get_lead_details(record_id: str, batch_id: Optional[str] = None):
+async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=Depends(get_current_user)):
     """Retrieve full intelligence report data for a specific lead."""
-    df = _load_leads_df(batch_id)
-    
-    if 'record_id' not in df.columns:
-        df['record_id'] = df.index.astype(str)
+    query = {"company_id": user["company_id"], "lead_id": record_id}
+    if batch_id:
+        query["batch_id"] = batch_id
         
-    if record_id in df['record_id'].values:
-        idx = df[df['record_id'] == record_id].index[0]
-    elif 'lead_id' in df.columns and record_id in df['lead_id'].values:
-        idx = df[df['lead_id'] == record_id].index[0]
-    else:
+    lead_doc = await leads_collection.find_one(query)
+    if not lead_doc:
         raise HTTPException(status_code=404, detail="Lead not found")
         
-    row = df.loc[idx].where(pd.notnull(df.loc[idx]), None).to_dict()
+    profile = lead_doc.get("profile", {})
+    name = profile.get("name", "Unknown")
+    company = profile.get("company", "Unknown")
     
-    import json
-    # Map CSV fields into the deeply nested Intelligence Report schema
-    lead_id = row.get('lead_id') or str(idx)
-    name = row.get('name') or row.get('first_name') or "Unknown"
-    company = row.get('company') or row.get('organization') or "Unknown"
-    title = row.get('title', "Unknown")
+    intel = lead_doc.get("intel", {})
+    email_data = intel.get("email", {})
+    email_preview = email_data.get("preview", "")
     
-    # Default Mock / Fallback Values
-    email_draft = [
-        {"type": "text", "content": f"Hi {name.split(' ')[0]},"},
-        {"type": "br"},
-        {"type": "text", "content": "I noticed your recent activity..."}
-    ]
-    email_subject = "Checking in"
-    personalization_factors = []
-    research_signals = ["High Engagement", "Target Account Hit"]
-    intent_reasoning = f"Based on {row.get('visits', 0)} visits and {row.get('pages_per_visit', 0)} pages/visit."
-    intent_recommendation = {"next_best_action": "Pending analysis", "urgency": "Medium"}
-    timing_rec = "Tuesday 10:00 AM"
-    timing_reason = "High probability of engagement based on historical activity."
-    optimal_time_window = "N/A"
-    approach = {"type": "standard", "urgency": 50, "content_suggestions": ["Follow up"]}
-    engagement_prediction = {"response_probability": 0.0, "expected_delay": 24}
-    timeline = {}
-    
-    from datetime import datetime
-    now_str = datetime.now().strftime("%H:%M:%S")
-    crm_logs = [
-        {"time": now_str, "agent": "SYSTEM", "action": "Initialized lead record.", "status": "INIT"}
-    ]
-    
-    # Attempt to load rich data from the agent outputs directory
-    outputs_dir = os.path.join(BASE_DIR, "outputs")
-    intel_db_path = os.path.join(outputs_dir, "intel_db.json")
-    
-    if os.path.exists(intel_db_path):
-        try:
-            with open(intel_db_path, "r") as f:
-                intel_db = json.load(f)
+    paragraphs = str(email_preview).replace('\\n', '\n').split('\n')
+    draft_blocks = []
+    for line in paragraphs:
+        if line.strip() == "":
+            draft_blocks.append({"type": "br"})
+        else:
+            draft_blocks.append({"type": "text", "content": line})
             
-            if lead_id in intel_db:
-                state = intel_db[lead_id]
-                
-                # Map research (Agent 1)
-                # Ensure each signal is a flat string because frontend expects an array of strings
-                if "quality_indicators" in state and isinstance(state["quality_indicators"], list):
-                    research_signals = [
-                        f"{q.get('metric', '')}: {q.get('value', '')}" if isinstance(q, dict) else str(q)
-                        for q in state["quality_indicators"]
-                    ]
-                
-                # Map intent (Agent 2)
-                if "key_signals" in state and isinstance(state["key_signals"], list):
-                    signals = [s.get("signal", str(s)) if isinstance(s, dict) else str(s) for s in state["key_signals"]]
-                    intent_reasoning = " \u2022 ".join(signals)
-                if "intent_recommendation" in state:
-                    intent_recommendation = state["intent_recommendation"]
-                
-                # Map message (Agent 3) - Split into lines and breaks for React rendering
-                if "email_preview" in state:
-                    raw_text = state["email_preview"]
-                    paragraphs = str(raw_text).replace('\\n', '\n').split('\n')
-                    draft_blocks = []
-                    for line in paragraphs:
-                        if line.strip() == "":
-                            draft_blocks.append({"type": "br"})
-                        else:
-                            draft_blocks.append({"type": "text", "content": line})
-                    email_draft = draft_blocks
-                if "subject" in state:
-                    email_subject = state.get("subject", "")
-                if "personalization_factors" in state:
-                    personalization_factors = state.get("personalization_factors", [])
-                
-                # Map timing (Agent 4)
-                if "timing" in state and isinstance(state["timing"], dict):
-                    timing_rec = f"{state['timing'].get('recommended_date', '')} {state['timing'].get('send_time', '')}".strip()
-                    timing_reason = state['timing'].get('reasoning', '')
-                    optimal_time_window = state['timing'].get('optimal_time_window', '')
-                if "approach" in state:
-                    approach = state["approach"]
-                if "engagement_prediction" in state:
-                    engagement_prediction = state["engagement_prediction"]
-                if "timeline" in state:
-                    timeline = state["timeline"]
-                
-                # Map logs (Agent 5 - Construct from the state's success)
-                if "lead_summary" in state:
-                    crm_logs = [
-                        {"time": now_str, "agent": "RESEARCH", "action": f"Identified {len(research_signals)} signals.", "status": "SUCCESS"},
-                        {"time": now_str, "agent": "INTENT", "action": f"Calculated Intent Score: {state.get('intent_score', 0)}", "status": "SUCCESS"},
-                        {"time": now_str, "agent": "STRATEGY", "action": "Draft generated via LangGraph.", "status": "SUCCESS"},
-                        {"time": now_str, "agent": "TIMING", "action": f"Analyzed history and targeted {timing_rec}", "status": "SUCCESS"},
-                        {"time": now_str, "agent": "SYSTEM", "action": "Graph sequence processing finished.", "status": "SUCCESS"}
-                    ]
-                    
-        except Exception as e:
-            print(f"Error loading intel file: {e}")
+    quality_indicators = intel.get("quality_indicators", [])
+    research_signals = [
+        f"{q.get('metric', '')}: {q.get('value', '')}" if isinstance(q, dict) else str(q)
+        for q in quality_indicators
+    ]
+    if not research_signals:
+         research_signals = ["High Engagement", "Target Account Hit"] # fallback UI
+         
+    key_signals = intel.get("key_signals", [])
+    signals_list = [s.get("signal", str(s)) if isinstance(s, dict) else str(s) for s in key_signals]
+    intent_reasoning = " • ".join(signals_list) if signals_list else "Pending analysis"
     
+    timing_data = intel.get("timing", {})
+    timing_rec = f"{timing_data.get('recommended_date', '')} {timing_data.get('send_time', '')}".strip()
+    
+    crm_logs = []
+    cursor = agent_activity_collection.find({"lead_id": record_id, "company_id": user["company_id"]}).sort("timestamp", 1)
+    activities = await cursor.to_list(length=100)
+    
+    for act in activities:
+        crm_logs.append({
+            "time": act.get("timestamp").strftime("%H:%M:%S") if act.get("timestamp") else "",
+            "agent": act.get("agent", "SYSTEM"),
+            "action": act.get("action", ""),
+            "status": act.get("status", "SUCCESS")
+        })
+
+    # Fallback log if empty
+    if not crm_logs:
+        crm_logs.append({
+             "time": datetime.utcnow().strftime("%H:%M:%S"),
+             "agent": "SYSTEM",
+             "action": "Legacy record loaded from database.",
+             "status": "INFO"
+        })
+
     return {
-        "lead_id": lead_id,
+        "lead_id": record_id,
         "profile": {
             "name": name,
-            "title": title,
+            "title": profile.get("title", "Unknown"),
             "company": company,
-            "linkedin": row.get('linkedin', f"linkedin.com/in/{name.lower().replace(' ', '')}"),
-            "website": row.get('website', f"{company.lower().replace(' ', '')}.com"),
-            "bio": row.get('bio', f"{title} at {company}. Leading strategic initiatives and growth.")
+            "linkedin": profile.get('linkedin') or f"linkedin.com/in/{name.lower().replace(' ', '')}",
+            "website": profile.get('website') or f"{company.lower().replace(' ', '')}.com",
+            "bio": profile.get('bio') or f"{profile.get('title')} at {company}"
         },
         "agents": {
             "research": {
@@ -269,76 +231,162 @@ def get_lead_details(record_id: str, batch_id: Optional[str] = None):
                 "signals": research_signals
             },
             "intent": {
-                "score": row.get('intent_score', row.get('intent', 0)),
+                "score": intel.get("intent_score", 0),
                 "reasoning": intent_reasoning,
-                "recommendation": intent_recommendation
+                "recommendation": intel.get("intent_recommendation", {})
             },
             "message": {
-                "draft": email_draft,
-                "subject": email_subject,
-                "personalization_factors": personalization_factors
+                "draft": draft_blocks,
+                "subject": email_data.get("subject", ""),
+                "personalization_factors": email_data.get("personalization_factors", [])
             },
             "timing": {
                 "recommended": timing_rec,
-                "recommendedReason": timing_reason,
-                "optimal_time_window": optimal_time_window,
-                "approach": approach,
-                "engagement_prediction": engagement_prediction,
-                "timeline": timeline
+                "recommendedReason": timing_data.get("reasoning", ""),
+                "optimal_time_window": timing_data.get("optimal_time_window", ""),
+                "approach": intel.get("approach", {}),
+                "engagement_prediction": intel.get("engagement_prediction", {}),
+                "timeline": lead_doc.get("crm", {}).get("timeline", {})
             },
             "crm": {
                 "logs": crm_logs
             }
         },
-        "status": row.get('status', 'Ready'),
-        "batch_id": batch_id
+        "status": lead_doc.get("status", "Ready"),
+        "batch_id": lead_doc.get("batch_id")
     }
 
 @router.patch("/{record_id}/status")
-def update_lead_status(record_id: str, payload: dict = Body(...)):
+async def update_lead_status(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
     new_status = payload.get("status")
     intent_score = payload.get("intent_score")
     
     if not new_status and intent_score is None:
         raise HTTPException(status_code=400, detail="Missing status or intent_score in body")
         
-    df = _load_leads_df()
+    query = {"lead_id": record_id, "company_id": user["company_id"]}
+    update_data = {}
     
-    if 'record_id' not in df.columns:
-        df['record_id'] = df.index.astype(str)
-        
-    # Also support searching by lead_id 
-    if record_id in df['record_id'].values:
-        idx = df[df['record_id'] == record_id].index[0]
-    elif 'lead_id' in df.columns and record_id in df['lead_id'].values:
-        idx = df[df['lead_id'] == record_id].index[0]
-    else:
-        raise HTTPException(status_code=404, detail="Lead not found")
-        
     if new_status:
-        df.at[idx, 'status'] = new_status
+        update_data["status"] = new_status
     if intent_score is not None:
-        df.at[idx, 'intent_score'] = intent_score
+        update_data["intel.intent_score"] = intent_score
         
-    # We should update intel_db.json instead of Leads_Data.csv
-    intel_db_path = os.path.join(BASE_DIR, "outputs", "intel_db.json")
-    if os.path.exists(intel_db_path):
-        try:
-            with open(intel_db_path, "r") as f:
-                intel_data = json.load(f)
-                
-            lead_id_val = df.at[idx, 'lead_id']
-            if lead_id_val in intel_data:
-                if new_status:
-                    intel_data[lead_id_val]["status"] = new_status
-                if intent_score is not None:
-                    intel_data[lead_id_val]["intent_score"] = float(intent_score)
-                    
-            with open(intel_db_path, "w") as f:
-                json.dump(intel_data, f, indent=4)
-        except Exception as e:
-            print(f"Failed to update intel_db.json: {e}")
+    update_data["updated_at"] = datetime.utcnow()
     
-    # Return updated row
-    updated_row = df.loc[idx].where(pd.notnull(df.loc[idx]), None).to_dict()
-    return updated_row
+    result = await leads_collection.update_one(query, {"$set": update_data})
+    
+    if result.matched_count == 0:
+         raise HTTPException(status_code=404, detail="Lead not found")
+         
+    return {"status": "success"}
+
+@router.post("/{record_id}/approve-email")
+async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
+    """Send approved email and log to CRM"""
+    subject = payload.get("subject")
+    content = payload.get("content")
+    to_email = payload.get("to_email", "mock@lead.com")
+    
+    if not subject or not content:
+        raise HTTPException(status_code=400, detail="Missing subject or content")
+        
+    query = {"lead_id": record_id, "company_id": user["company_id"]}
+    lead_doc = await leads_collection.find_one(query)
+    if not lead_doc:
+         raise HTTPException(status_code=404, detail="Lead not found")
+         
+    # 1. Send Email
+    from services.email_sender import EmailService
+    try:
+        await EmailService.send_email(
+            company_id=user["company_id"],
+            to_address=to_email,
+            subject=subject,
+            html_content=content
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(e)}")
+        
+    # 2. Update CRM state
+    from db import email_logs_collection
+    now = datetime.utcnow()
+    
+    await leads_collection.update_one(query, {
+        "$set": {
+            "crm.email_sent": True,
+            "updated_at": now
+        }
+    })
+    
+    # 3. Log to activity
+    await agent_activity_collection.insert_one({
+        "company_id": user["company_id"],
+        "batch_id": lead_doc.get("batch_id"),
+        "lead_id": record_id,
+        "agent": "HUMAN",
+        "action": "Approved and dispatched email via UI",
+        "status": "SUCCESS",
+        "timestamp": now
+    })
+    
+    # 4. Log to email_logs
+    await email_logs_collection.insert_one({
+        "company_id": user["company_id"],
+        "batch_id": lead_doc.get("batch_id"),
+        "lead_id": record_id,
+        "subject": subject,
+        "content_snapshot": content,
+        "sent_at": now,
+        "status": "delivered"
+    })
+    
+    return {"status": "success", "message": "Email sent and logged successfully"}
+
+@router.post("/{record_id}/schedule-followup")
+async def schedule_followup(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
+    """Schedule a future email follow-up"""
+    subject = payload.get("subject")
+    content = payload.get("content")
+    scheduled_at_str = payload.get("scheduled_at") # ISO 8601 string expected
+    
+    if not subject or not content or not scheduled_at_str:
+        raise HTTPException(status_code=400, detail="Missing subject, content, or scheduled_at")
+        
+    try:
+        if scheduled_at_str.endswith("Z"):
+            scheduled_at_str = scheduled_at_str[:-1] + "+00:00"
+        scheduled_at = datetime.fromisoformat(scheduled_at_str)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
+        
+    query = {"lead_id": record_id, "company_id": user["company_id"]}
+    lead_doc = await leads_collection.find_one(query)
+    if not lead_doc:
+         raise HTTPException(status_code=404, detail="Lead not found")
+         
+    from db import followup_queue_collection
+    now = datetime.utcnow()
+    
+    await followup_queue_collection.insert_one({
+        "company_id": user["company_id"],
+        "lead_id": record_id,
+        "batch_id": lead_doc.get("batch_id"),
+        "subject": subject,
+        "content": content,
+        "status": "pending",
+        "scheduled_at": scheduled_at,
+        "created_at": now
+    })
+    
+    await agent_activity_collection.insert_one({
+        "company_id": user["company_id"],
+        "batch_id": lead_doc.get("batch_id"),
+        "lead_id": record_id,
+        "agent": "HUMAN",
+        "action": f"Scheduled follow-up email for {scheduled_at.strftime('%Y-%m-%d %H:%M')}",
+        "status": "SUCCESS",
+        "timestamp": now
+    })
+    
+    return {"status": "success", "message": "Follow-up scheduled successfully"}

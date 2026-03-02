@@ -8,13 +8,18 @@ export async function uploadBatch(files, startIndex = null, endIndex = null) {
     if (files.emailLogs) formData.append("email_logs", files.emailLogs);
     if (files.leadsData) formData.append("leads_data", files.leadsData);
     if (files.salesPipeline) formData.append("sales_pipeline", files.salesPipeline);
-    
+
     // Add optional range parameters
     if (startIndex !== null && startIndex !== "") formData.append("start_index", startIndex);
     if (endIndex !== null && endIndex !== "") formData.append("end_index", endIndex);
 
+    const token = localStorage.getItem("access_token");
+
     const res = await fetch(`${API}/batch/upload`, {
         method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+        },
         body: formData,
     });
 

@@ -15,10 +15,71 @@ export default function IntelPage({ params }) {
 
     const [target, setTarget] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isSending, setIsSending] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
+
+    const handleRegenerate = async () => {
+        if (!target) return;
+        setIsRegenerating(true);
+        try {
+            const res = await fetch(`${API}/agents/regenerate/${id}/email_strategy`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+                }
+            });
+            if (!res.ok) throw new Error("Failed to regenerate email strategy");
+
+            // Quick reload to show the new draft and updated CRM logs
+            window.location.reload();
+
+        } catch (e) {
+            console.error("Regeneration failed", e);
+            alert("Regeneration failed: " + e.message);
+        } finally {
+            setIsRegenerating(false);
+        }
+    };
+
+    const handleApproveEmail = async () => {
+        if (!target) return;
+        setIsSending(true);
+        try {
+            // Get text from the content editable div or structured draft
+            const contentBody = document.getElementById("email-editor")?.innerHTML || target.draft.map(d => d.content).join("");
+            const res = await fetch(`${API}/leads/${id}/approve-email`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+                },
+                body: JSON.stringify({
+                    subject: target.subject,
+                    content: contentBody,
+                    to_email: target.email || "mock@lead.com" // assumes lead email is fetched
+                })
+            });
+            if (!res.ok) throw new Error("Failed to dispatch email");
+            alert("Email dispatched successfully and logged to CRM!");
+            // Refresh details
+            window.location.reload();
+        } catch (e) {
+            console.error("Email dispatch failed", e);
+            alert("Delivery failed: " + e.message);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     useEffect(() => {
         const queryParams = batchId ? `?batch_id=${batchId}` : '';
-        fetch(`${API}/leads/${id}${queryParams}`)
+        const token = localStorage.getItem("access_token");
+        fetch(`${API}/leads/${id}${queryParams}`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        })
             .then(res => {
                 if (!res.ok) throw new Error("Lead not found");
                 return res.json();
@@ -46,23 +107,15 @@ export default function IntelPage({ params }) {
                         engagementPrediction: data.agents?.timing?.engagement_prediction || {},
                         timeline: data.agents?.timing?.timeline || {},
                         localTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        events: [
-                            { label: "TRIGGER EVENT", desc: "Pipeline Initialized", time: "Just Now", type: "white" }
-                        ],
-                        targetTime: "11:32 AM (PST)"
+                        events: data.agents?.timing?.events || [],
+                        targetTime: data.agents?.timing?.targetTime || "Unknown"
                     },
                     draft: Array.isArray(data.agents?.message?.draft) ? data.agents.message.draft : [
                         { type: 'text', content: data.agents?.message?.draft || "Compiling draft..." }
                     ],
                     subject: data.agents?.message?.subject || "No Subject",
                     personalizationFactors: data.agents?.message?.personalization_factors || [],
-                    logs: data.agents?.crm?.logs || [
-                        { time: "10:41:00", agent: "RESEARCH", action: "Scraped web endpoints.", status: "SUCCESS" },
-                        { time: "10:41:12", agent: "INTENT", action: "Calculated Intent Score: 12.0", status: "SUCCESS" },
-                        { time: "10:41:55", agent: "STRATEGY", action: "Draft generated via GPT-4", status: "SUCCESS" },
-                        { time: "10:42:01", agent: "TIMING", action: "Analyzed 45 historical signals.", status: "SUCCESS" },
-                        { time: "10:42:05", agent: "SYSTEM", action: "Graph sequence processing finished.", status: "SUCCESS" }
-                    ]
+                    logs: data.agents?.crm?.logs || []
                 };
                 setTarget(fullData);
                 setLoading(false);
@@ -181,7 +234,9 @@ export default function IntelPage({ params }) {
                                     <div className="p-6 flex flex-col gap-6 flex-1">
                                         {/* Photo - using a solid color as placeholder for the external image */}
                                         <div className="w-full aspect-square bg-mute border border-ink relative overflow-hidden group transition-all duration-500 flex items-center justify-center text-ink/20">
-                                            <span className="material-symbols-outlined text-6xl">person</span>
+                                            <span className="font-display font-bold text-[96px] text-ink/30 group-hover:scale-110 transition-transform">
+                                                {target?.name ? target.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : ""}
+                                            </span>
                                             <div className="absolute bottom-0 left-0 bg-ink text-paper px-2 py-1 font-mono text-xs">IMG_REF_001</div>
                                         </div>
                                         {/* Bio */}
@@ -303,7 +358,7 @@ export default function IntelPage({ params }) {
                                             </button>
                                         </div>
                                         {/* Content Editable Area */}
-                                        <div className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto" contentEditable suppressContentEditableWarning>
+                                        <div id="email-editor" className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto" contentEditable suppressContentEditableWarning>
                                             <div className="mb-4 pb-2 border-b border-ink/20 font-bold">
                                                 Subject: {target.subject}
                                             </div>
@@ -315,18 +370,24 @@ export default function IntelPage({ params }) {
                                         </div>
                                         {/* Actions Footer */}
                                         <div className="p-4 border-t border-ink bg-paper flex justify-between items-center gap-4">
-                                            <button className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm">
-                                                <span className="material-symbols-outlined text-lg">autorenew</span>
-                                                REGENERATE
+                                            <button
+                                                onClick={handleRegenerate}
+                                                disabled={isRegenerating}
+                                                className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <span className={`material-symbols-outlined text-lg ${isRegenerating ? 'animate-spin' : ''}`}>autorenew</span>
+                                                {isRegenerating ? 'WORKING...' : 'REGENERATE'}
                                             </button>
                                             <div className="flex gap-2">
                                                 <button className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm">
                                                     <span className="material-symbols-outlined text-lg">content_copy</span>
                                                     COPY
                                                 </button>
-                                                <button className="flex items-center gap-2 px-6 py-2 bg-primary text-white border border-ink hover:bg-ink transition-colors font-display font-bold text-sm shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">
-                                                    <span className="material-symbols-outlined text-lg">send</span>
-                                                    APPROVE & LOG
+                                                <button
+                                                    onClick={handleApproveEmail}
+                                                    disabled={isSending}
+                                                    className="flex items-center gap-2 px-6 py-2 bg-primary text-white border border-ink hover:bg-ink transition-colors font-display font-bold text-sm shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    <span className="material-symbols-outlined text-lg">{isSending ? 'hourglass_empty' : 'send'}</span>
+                                                    {isSending ? 'DISPATCHING...' : 'APPROVE & LOG'}
                                                 </button>
                                             </div>
                                         </div>

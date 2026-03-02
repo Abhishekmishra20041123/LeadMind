@@ -4,10 +4,13 @@ import time
 import json
 import pandas as pd
 from datetime import datetime
-from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form
+from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form, Depends
 import asyncio
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from bson import ObjectId
+
+# Import dependencies and DB collections
+from dependencies import get_current_user
+from db import batches_collection, leads_collection, pipeline_collection, email_logs_collection, agent_activity_collection
 
 # Import Ollama wrapper
 from api.agents import OllamaWrapper
@@ -31,99 +34,88 @@ from prompts.followup_timing_prompts import followup_timing_prompts
 
 router = APIRouter()
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+DATA_DIR = os.path.join(root_dir, "data")
 BATCHES_DIR = os.path.join(DATA_DIR, "batches")
-GLOBAL_LEADS_CSV = os.path.join(DATA_DIR, "Leads_Data.csv")
-
 os.makedirs(BATCHES_DIR, exist_ok=True)
 
-def update_batch_progress(batch_id: str, updates: dict):
-    """Helper to merge updates into the batch's _progress.json"""
-    batch_dir = os.path.join(BATCHES_DIR, batch_id)
-    progress_file = os.path.join(batch_dir, "_progress.json")
-    
-    if os.path.exists(progress_file):
-        with open(progress_file, "r") as f:
-            data = json.load(f)
-    else:
-        data = {
-            "batch_id": batch_id,
-            "status": "processing",
-            "percent": 0,
-            "processed_count": 0,
-            "total_count": 0,
-            "agents": {
-                "research": "pending",
-                "intent": "pending",
-                "message": "pending",
-                "timing": "pending",
-                "logger": "pending"
-            }
-        }
-    
-    for key, val in updates.items():
-        if key == "agents":
-            data["agents"].update(val)
-        else:
-            data[key] = val
-        
-    temp_file = progress_file + ".tmp"
-    with open(temp_file, "w") as f:
-        json.dump(data, f, indent=4)
-    os.replace(temp_file, progress_file)
+async def update_batch_progress(batch_id: str, updates: dict):
+    """Helper to merge updates into the batch document in MongoDB"""
+    await batches_collection.update_one(
+        {"batch_id": batch_id},
+        {"$set": updates}
+    )
+
+async def push_batch_log(batch_id: str, log_message: str):
+    """Helper to push a timestamped log to the batch document"""
+    timestamp = datetime.utcnow().strftime("%H:%M:%S")
+    formatted_msg = f"[{timestamp}] {log_message}"
+    await batches_collection.update_one(
+        {"batch_id": batch_id},
+        {"$push": {"logs": formatted_msg}}
+    )
+
+@router.get("/list")
+async def list_batches(user=Depends(get_current_user)):
+    """List all batches for the current company"""
+    cursor = batches_collection.find({"company_id": user["company_id"]}).sort("created_at", -1)
+    batches = await cursor.to_list(length=100)
+    for b in batches:
+        b["_id"] = str(b["_id"])
+        b["company_id"] = str(b["company_id"])
+    return {"batches": batches}
 
 @router.get("/{batch_id}/progress")
-def get_batch_progress(batch_id: str):
-    progress_file = os.path.join(BATCHES_DIR, batch_id, "_progress.json")
-    if not os.path.exists(progress_file):
+async def get_batch_progress(batch_id: str, user=Depends(get_current_user)):
+    batch = await batches_collection.find_one({"batch_id": batch_id, "company_id": user["company_id"]})
+    if not batch:
         raise HTTPException(status_code=404, detail="Batch progress not found")
-    with open(progress_file, "r") as f:
-        return json.load(f)
+    batch["_id"] = str(batch["_id"])
+    batch["company_id"] = str(batch["company_id"])
+    return batch
 
-def process_batch_background(batch_id: str, start_index: int = None, end_index: int = None):
+
+
+async def process_batch_background(company_id_str: str, batch_id: str, start_index: int = None, end_index: int = None):
     """
-    Background worker that uses LangGraph to process each lead sequentially 
-    through 5 AI agents, updating the CSV instantly so the UI can stream it.
+    Background worker that uses LangGraph to process each lead concurrently,
+    writing results securely to MongoDB.
     """
     try:
-        time.sleep(1) # Give the UI a second to process the success response
+        await asyncio.sleep(1) # Give the UI a second to process the success response
+        company_id = ObjectId(company_id_str)
         
         batch_dir = os.path.join(BATCHES_DIR, batch_id)
         leads_file = os.path.join(batch_dir, "Leads_Data.csv")
         emails_file = os.path.join(batch_dir, "Email_Logs.csv")
         
         if not os.path.exists(leads_file):
-            update_batch_progress(batch_id, { "status": "failed", "error": "Leads file missing" })
+            await update_batch_progress(batch_id, { "status": "failed", "error": "Leads file missing" })
             return
             
         df = pd.read_csv(leads_file)
         emails_df = pd.read_csv(emails_file) if os.path.exists(emails_file) else pd.DataFrame()
         
-        # Apply range filtering if specified
         original_total = len(df)
-        
         start_idx = start_index if start_index is not None and start_index >= 0 else 0
         end_idx = end_index if end_index is not None and end_index > start_idx else original_total
-        
-        # Ensure we don't go out of bounds
         end_idx = min(end_idx, original_total)
         
-        # Slice the dataframe to only process the requested leads
         df_to_process = df.iloc[start_idx:end_idx].copy()
+        total = len(df_to_process)
         
         # Load the Ollama LLM
         llm = OllamaWrapper('minimax-m2.5:cloud')
         
-        # Compile the 5 independent LangGraph pipelines
-        lead_research_agent = create_lead_research_graph(llm, lead_research_prompts)
-        intent_qualifier_agent = create_intent_qualifier_graph(llm, intent_qualifier_prompts)
-        email_strategy_agent = create_email_strategy_graph(llm, email_strategy_prompts)
-        followup_timing_agent = create_followup_timing_graph(llm, followup_timing_prompts)
-        crm_logger_agent = create_crm_logger_graph()
+        # Compile pipelines
+        agents = {
+            'research': create_lead_research_graph(llm, lead_research_prompts),
+            'intent': create_intent_qualifier_graph(llm, intent_qualifier_prompts),
+            'email': create_email_strategy_graph(llm, email_strategy_prompts),
+            'timing': create_followup_timing_graph(llm, followup_timing_prompts),
+            'logger': create_crm_logger_graph()
+        }
         
-        total = len(df_to_process)
-        
-        update_batch_progress(batch_id, {
+        await update_batch_progress(batch_id, {
             "percent": 0,
             "processed_count": 0,
             "total_count": total,
@@ -131,113 +123,135 @@ def process_batch_background(batch_id: str, start_index: int = None, end_index: 
             "message": f"Processing subset of {total} leads (rows {start_idx} to {end_idx-1})" if total < original_total else f"Processing all {total} leads"
         })
         
-        # Stream analytics loop
-        file_lock = threading.Lock()
         processed = 0
+        semaphore = asyncio.Semaphore(5)  # Limit concurrent LangGraph executions (sync LLM calls)
 
-        def process_lead(index, row):
+        async def process_single_lead(index, row):
             nonlocal processed
             lead_dict = row.dropna().to_dict()
-            lead_id = lead_dict.get("lead_id", "")
+            lead_id = str(lead_dict.get("lead_id", ""))
             
-            # Extract previous emails for this specific lead to give to the state
-            if not emails_df.empty and 'lead_id' in emails_df.columns:
-                email_history = emails_df[emails_df['lead_id'] == lead_id].to_dict('records')
-            else:
-                email_history = []
-                
-            # Initialize unifying state
-            state = {
-                "lead": lead_dict,
-                "email_history": email_history
-            }
-            
-            print(f"\\n[Processing] Lead {lead_id} ({lead_dict.get('company', 'Unknown')}) through LangGraph pipeline...")
-            
-            try:
-                # Node 1: Lead Research
-                state = lead_research_agent.invoke(state)
-                # Node 2: Intent Qualifier
-                state = intent_qualifier_agent.invoke(state)
-                # Node 3: Email Strategy 
-                state = email_strategy_agent.invoke(state)
-                # Node 4: Followup Timing
-                state = followup_timing_agent.invoke(state)
-                # Node 5: CRM Logger
-                state = crm_logger_agent.invoke(state)
-                
-                with file_lock:
-                    # Success! Extract the outputs into our dataframe for the frontend
-                    df.at[index, "status"] = "Ready"
-                    df.at[index, "intent_score"] = state.get("intent_score", 0.0)
-                    df.at[index, "subject"] = state.get("subject", "")
-                    df.at[index, "email_preview"] = state.get("email_preview", "")
+            async with semaphore:
+                if not emails_df.empty and 'lead_id' in emails_df.columns:
+                    email_history = emails_df[emails_df['lead_id'] == lead_id].to_dict('records')
+                else:
+                    email_history = []
                     
-                    # Dump the full LangGraph state to an intel payload for the frontend /intel page
-                    outputs_dir = os.path.join(root_dir, "outputs")
-                    os.makedirs(outputs_dir, exist_ok=True)
-                    
-                    intel_db_path = os.path.join(outputs_dir, "intel_db.json")
-                    intel_db = {}
-                    if os.path.exists(intel_db_path):
-                        try:
-                            with open(intel_db_path, "r") as f:
-                                intel_db = json.load(f)
-                        except json.JSONDecodeError:
-                            pass
-                    
-                    intel_db[lead_id] = state
-                    temp_intel = intel_db_path + ".tmp"
-                    with open(temp_intel, "w") as f:
-                        json.dump(intel_db, f, indent=4)
-                    os.replace(temp_intel, intel_db_path)
-                        
-                    # Stream this row instantly to the Ledger
-                    temp_leads = leads_file + ".tmp"
-                    df.to_csv(temp_leads, index=False)
-                    os.replace(temp_leads, leads_file)
+                state = {"lead": lead_dict, "email_history": email_history}
+                company_name = lead_dict.get('company', 'Unknown')
+                print(f"\\n[Processing] Lead {lead_id} ({company_name}) through LangGraph pipeline...")
+                await push_batch_log(batch_id, f"Initializing pipeline for {company_name} (Lead ID: {lead_id})")
                 
-            except Exception as e:
-                print(f"Error processing lead {lead_id}: {e}")
-                with file_lock:
-                    df.at[index, "status"] = "Error"
-                    temp_leads = leads_file + ".tmp"
-                    df.to_csv(temp_leads, index=False)
-                    os.replace(temp_leads, leads_file)
-                
-            with file_lock:
-                # Tick progress
+                try:
+                    # Run CPU/Network heavy LangGraph nodes individually in threads to allow real-time UI logging
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [1/5] Lead Web Research...")
+                    state = await asyncio.to_thread(agents['research'].invoke, state)
+                    
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [2/5] Intent Qualification Data Extraction...")
+                    state = await asyncio.to_thread(agents['intent'].invoke, state)
+                    
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [3/5] Personalized Email Strategy Formulation...")
+                    state = await asyncio.to_thread(agents['email'].invoke, state)
+
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [4/5] Follow-up Timing Optimization...")
+                    state = await asyncio.to_thread(agents['timing'].invoke, state)
+
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [5/5] Formatting and CRM Serialization...")
+                    state = await asyncio.to_thread(agents['logger'].invoke, state)
+                    
+                    # Dump mapped state to MongoDB `leads` collection
+                    await leads_collection.update_one(
+                        {"lead_id": lead_id, "batch_id": batch_id},
+                        {
+                            "$set": {
+                                "company_id": company_id,
+                                "profile": {
+                                    "name": lead_dict.get("name"),
+                                    "title": lead_dict.get("title"),
+                                    "company": lead_dict.get("company"),
+                                    "region": lead_dict.get("region"),
+                                    "lead_source": lead_dict.get("lead_source"),
+                                    "industry": lead_dict.get("industry")
+                                },
+                                "activity": {
+                                    "visits": lead_dict.get("visits", 0),
+                                    "time_on_site": lead_dict.get("time_on_site", 0.0),
+                                    "pages_per_visit": lead_dict.get("pages_per_visit", 0.0),
+                                    "converted": lead_dict.get("converted", False)
+                                },
+                                "intel": {
+                                    "status": "completed",
+                                    "intent_score": state.get("intent_score", 0.0),
+                                    "key_signals": state.get("key_signals", []),
+                                    "email": {
+                                        "subject": state.get("subject", ""),
+                                        "preview": state.get("email_preview", ""),
+                                        "personalization_factors": state.get("personalization_factors", [])
+                                    },
+                                    "timing": state.get("timing", {}),
+                                    "approach": state.get("approach", {}),
+                                    "engagement_prediction": state.get("engagement_prediction", {})
+                                },
+                                "crm": {
+                                    "email_sent": False,
+                                    "timeline": state.get("timeline", {})
+                                },
+                                "status": "Ready",
+                                "updated_at": datetime.utcnow()
+                            },
+                            "$setOnInsert": {"created_at": datetime.utcnow()}
+                        },
+                        upsert=True
+                    )
+                    
+                    # Log activity
+                    await agent_activity_collection.insert_one({
+                        "company_id": company_id,
+                        "batch_id": batch_id,
+                        "lead_id": lead_id,
+                        "agent": "PIPELINE",
+                        "action": "Completed 5-node AI analysis",
+                        "status": "SUCCESS",
+                        "timestamp": datetime.utcnow()
+                    })
+                    await push_batch_log(batch_id, f"SUCCESS: Completed 5-node AI analysis for {company_name}")
+
+                except Exception as e:
+                    print(f"Error processing lead {lead_id}: {e}")
+                    await push_batch_log(batch_id, f"ERROR: Failed processing {company_name} - {str(e)}")
+                    await leads_collection.update_one(
+                        {"lead_id": lead_id, "batch_id": batch_id},
+                        {"$set": {"status": "Error", "intel.error": str(e), "company_id": company_id}},
+                        upsert=True
+                    )
+                    
+                # Update progress
                 processed += 1
                 percent = int((processed / total) * 100)
-                update_batch_progress(batch_id, {
+                await update_batch_progress(batch_id, {
                     "percent": percent,
                     "processed_count": processed,
                     "total_count": total
                 })
 
-        # Process all leads concurrently using worker threads
-        # Set max_workers=2 to balance parallel execution without overloading the local Ollama instance & locking up the system CPU.
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(process_lead, index, row) for index, row in df_to_process.iterrows()]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Future execution error: {e}")
+        # Process all leads concurrently
+        tasks = [process_single_lead(index, row) for index, row in df_to_process.iterrows()]
+        await asyncio.gather(*tasks)
             
         # Finish
-        update_batch_progress(batch_id, {
+        await update_batch_progress(batch_id, {
             "status": "completed",
             "percent": 100,
             "processed_count": total,
             "total_count": total,
             "agents": { k: "completed" for k in ["research", "intent", "message", "timing", "logger"] }
         })
-        print(f"Batch {batch_id} fully processed through LangGraph and synced to global Ledger mapping.")
+        print(f"Batch {batch_id} fully processed through LangGraph and synced to MongoDB.")
                 
     except Exception as e:
         print(f"Error during Background Batch processing: {e}")
-        update_batch_progress(batch_id, { "status": "failed", "percent": 0 })
+        await push_batch_log(batch_id, f"FATAL ERROR during batch processing: {str(e)}")
+        await update_batch_progress(batch_id, { "status": "failed", "percent": 0 })
 
 @router.post("/upload")
 async def upload_batch(
@@ -249,32 +263,60 @@ async def upload_batch(
     sales_pipeline: UploadFile = File(...),
     start_index: int = Form(None),
     end_index: int = Form(None),
+    user=Depends(get_current_user)
 ):
     try:
         import uuid
-        date_str = datetime.now().strftime("%Y_%m_%d")
+        date_str = datetime.utcnow().strftime("%Y_%m_%d")
         short_id = str(uuid.uuid4())[:8].upper()
         batch_id = f"BATCH_{date_str}_{short_id}"
         
         batch_dir = os.path.join(BATCHES_DIR, batch_id)
         os.makedirs(batch_dir, exist_ok=True)
         
-        # Helper to read into RAM and dump cleanly to the batch structure
-        async def save_file(upload_file: UploadFile, filename: str):
+        company_id = user["company_id"]
+        
+        # Helper to read into RAM, dump to batch structure, and return records
+        async def save_and_read_file(upload_file: UploadFile, filename: str):
             contents = await upload_file.read()
             df = pd.read_csv(io.BytesIO(contents))
             df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
             df.to_csv(os.path.join(batch_dir, filename), index=False)
+            return df.to_dict('records')
             
-        await save_file(agent_mapping, "Agent_Mapping.csv")
-        await save_file(crm_pipeline, "CRM_Pipeline.csv")
-        await save_file(email_logs, "Email_Logs.csv")
-        await save_file(leads_data, "Leads_Data.csv")
-        await save_file(sales_pipeline, "Sales_Pipeline.csv")
+        await save_and_read_file(agent_mapping, "Agent_Mapping.csv")
+        crm_records = await save_and_read_file(crm_pipeline, "CRM_Pipeline.csv")
+        email_records = await save_and_read_file(email_logs, "Email_Logs.csv")
+        await save_and_read_file(leads_data, "Leads_Data.csv")
+        sales_records = await save_and_read_file(sales_pipeline, "Sales_Pipeline.csv")
         
-        update_batch_progress(batch_id, { "percent": 0 })
+        # Save batch tracking doc
+        await batches_collection.insert_one({
+            "batch_id": batch_id,
+            "company_id": company_id,
+            "created_at": datetime.utcnow(),
+            "status": "processing",
+            "percent": 0,
+            "error": None,
+            "logs": [],
+            "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] }
+        })
+
+        # Bulk insert historical emails if present
+        if email_records:
+            for rec in email_records:
+                rec["company_id"] = company_id
+                rec["batch_id"] = batch_id
+            await email_logs_collection.insert_many(email_records)
+            
+        # Bulk insert sales pipeline if present
+        if sales_records:
+            for rec in sales_records:
+                rec["company_id"] = company_id
+                rec["batch_id"] = batch_id
+            await pipeline_collection.insert_many(sales_records)
         
-        background_tasks.add_task(process_batch_background, batch_id, start_index, end_index)
+        background_tasks.add_task(process_batch_background, str(company_id), batch_id, start_index, end_index)
         
         return {
             "batch_id": batch_id,

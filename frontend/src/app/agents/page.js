@@ -7,10 +7,41 @@ import { useBatchProgress } from "../../hooks/useBatchProgress";
 function AgentMonitorView() {
     const searchParams = useSearchParams();
     const batchId = searchParams.get('batch');
-    const progress = useBatchProgress(batchId);
+    const [activeBatchId, setActiveBatchId] = useState(batchId);
+    const [fetchingLatest, setFetchingLatest] = useState(!batchId);
 
-    // Fallback UI if not provided
-    if (!batchId) {
+    useEffect(() => {
+        if (!batchId) {
+            const token = localStorage.getItem("access_token");
+            fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/batch/list`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.batches && data.batches.length > 0) {
+                        setActiveBatchId(data.batches[0].batch_id);
+                    }
+                })
+                .catch(console.error)
+                .finally(() => setFetchingLatest(false));
+        } else {
+            setActiveBatchId(batchId);
+            setFetchingLatest(false);
+        }
+    }, [batchId]);
+
+    const progress = useBatchProgress(activeBatchId);
+
+    // Fallback UI if not provided and not fetching
+    if (fetchingLatest) {
+        return (
+            <div className="flex flex-col items-center justify-center p-24 font-mono animate-pulse text-ink/50 uppercase">
+                Locating active stream...
+            </div>
+        );
+    }
+
+    if (!activeBatchId) {
         return (
             <div className="flex flex-col items-center justify-center p-24 font-mono text-ink/50 uppercase">
                 Awaiting active batch allocation_
@@ -41,14 +72,19 @@ function AgentMonitorView() {
                 <div className="flex items-center gap-6">
                     <div className="flex flex-col justify-center">
                         <span className="font-mono text-[10px] text-ink/60 uppercase">Active Process Tracker</span>
-                        <h2 className="font-display font-bold text-xl tracking-tight leading-none mt-0.5">{batchId}</h2>
+                        <h2 className="font-display font-bold text-xl tracking-tight leading-none mt-0.5">{activeBatchId}</h2>
                     </div>
                     <div className="h-6 w-px bg-ink/20"></div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-mute border border-ink">
-                        <span className="material-symbols-outlined text-[14px]">
-                            {progress.status === 'completed' ? 'check_circle' : 'sync'}
-                        </span>
-                        <span className="font-mono text-xs font-bold uppercase">{progress.percent}% COMPLETE // {progress.status}</span>
+                    <div className="relative flex items-center gap-2 px-3 py-1.5 border border-ink overflow-hidden group">
+                        {progress.status === 'processing' ? (
+                            <div className="absolute top-0 left-0 h-full bg-primary/20 transition-all duration-500" style={{ width: `${progress.percent}%` }}></div>
+                        ) : null}
+                        <div className={`relative z-10 flex items-center gap-2 ${progress.status === 'processing' ? 'text-primary' : 'text-ink'}`}>
+                            <span className={`material-symbols-outlined text-[14px] ${progress.status === 'processing' ? 'animate-[spin_3s_linear_infinite]' : ''}`}>
+                                {progress.status === 'completed' ? 'check_circle' : 'sync'}
+                            </span>
+                            <span className="font-mono text-xs font-bold uppercase">{progress.percent}% COMPLETE // {progress.status}</span>
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -152,12 +188,34 @@ function AgentMonitorView() {
                         </span>
                     </div>
                 </div>
-                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto space-y-2">
-                    <div className="flex gap-4 opacity-50">
-                        <span className="text-white/40 w-24 shrink-0">SYS_OUT</span>
-                        <span className="text-data-green">[SYSTEM]</span>
-                        <span>{progress.status === 'completed' ? 'BATCH RUN SUCCESSFULLY FINALIZED' : 'STREAMING RAW PIPELINE LOGS...'}</span>
-                    </div>
+                <div className="flex-1 p-6 font-mono text-xs overflow-y-auto space-y-2 flex flex-col">
+                    {progress.logs && progress.logs.map((log, index) => {
+                        const isError = log.includes("ERROR");
+                        const isSuccess = log.includes("SUCCESS");
+                        return (
+                            <div key={index} className="flex gap-4 opacity-80">
+                                <span className="text-white/40 w-16 shrink-0">SYS_OUT</span>
+                                <span className={`${isError ? 'text-red-500' : isSuccess ? 'text-data-green' : 'text-primary'} shrink-0 min-w-[60px]`}>
+                                    [SYSTEM]
+                                </span>
+                                <span className={isError ? 'text-red-400' : 'text-paper/90'}>{log}</span>
+                            </div>
+                        )
+                    })}
+                    {progress.status !== 'completed' && (
+                        <div className="flex gap-4 opacity-50">
+                            <span className="text-white/40 w-16 shrink-0">SYS_OUT</span>
+                            <span className="text-data-green shrink-0 min-w-[60px]">[SYSTEM]</span>
+                            <span className="animate-pulse">STREAMING RAW PIPELINE LOGS...</span>
+                        </div>
+                    )}
+                    {progress.status === 'completed' && (
+                        <div className="flex gap-4">
+                            <span className="text-white/40 w-16 shrink-0">SYS_OUT</span>
+                            <span className="text-data-green shrink-0 min-w-[60px]">[SYSTEM]</span>
+                            <span className="text-data-green font-bold">BATCH RUN SUCCESSFULLY FINALIZED</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

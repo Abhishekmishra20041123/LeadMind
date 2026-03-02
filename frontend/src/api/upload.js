@@ -4,8 +4,13 @@ export async function uploadCSV(file) {
     const formData = new FormData();
     formData.append("file", file);
 
+    const token = localStorage.getItem("access_token");
+
     const res = await fetch(`${API}/leads/upload`, {
         method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`
+        },
         body: formData,
     });
 

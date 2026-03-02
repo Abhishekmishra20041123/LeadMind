@@ -7,6 +7,7 @@ CONTEXT:
 Lead Data: {lead}
 Intent Signals: {intent_signals}
 Company Info: {company_info}
+Operator Info: {operator_info}
 
 TASK:
 Craft a personalized email that:
@@ -28,7 +29,8 @@ GUIDELINES:
 - Use natural, conversational tone
 - Focus on their specific needs/pain points
 - End with clear next steps
-- NO PLACEHOLDERS. Skip names if not provided.
+- SIGN OFF YOUR EMAIL USING THE OPERATOR'S NAME AND COMPANY provided in Operator Info (e.g. "Best, John Doe | Acme Corp").
+- MENTION THE OPERATOR'S WEBSITE URL somewhere natural in the pitch or signature.
 - DO NOT wrap your response in markdown blocks!
 """
 }

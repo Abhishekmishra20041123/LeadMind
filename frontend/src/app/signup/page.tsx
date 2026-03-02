@@ -16,13 +16,19 @@ export default function SignupPage() {
         country: '',
         contactPersonName: '',
         email: '',
+        countryCode: '+1',
         phoneNumber: '',
         password: '',
         confirmPassword: ''
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        let value = e.target.value;
+        if (e.target.name === 'phoneNumber') {
+            // Only allow digits
+            value = value.replace(/\D/g, '');
+        }
+        setFormData({ ...formData, [e.target.name]: value });
         setError('');
     };
 
@@ -53,7 +59,7 @@ export default function SignupPage() {
                 country: formData.country,
                 contact_person_name: formData.contactPersonName,
                 email: formData.email,
-                phone_number: formData.phoneNumber,
+                phone_number: `${formData.countryCode} ${formData.phoneNumber}`,
                 password: formData.password
             };
 
@@ -269,10 +275,10 @@ export default function SignupPage() {
                                     Phone Number
                                 </label>
                                 <div className="flex">
-                                    <div className="flex items-center justify-center border border-black border-r-0 px-4 font-mono text-sm text-black bg-white">
-                                        +1
-                                    </div>
-                                    <input name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} required
+                                    <input name="countryCode" value={formData.countryCode || '+1'} onChange={handleChange} required
+                                        className="w-20 text-center border border-black border-r-0 px-2 font-mono text-sm text-black bg-white focus:ring-0 focus:border-primary transition-all"
+                                        placeholder="+1" type="text" />
+                                    <input name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} required maxLength={10} pattern="[0-9]{10}" title="Ten digit phone number"
                                         className="w-full bg-transparent border border-black px-4 py-5 font-mono text-sm text-black placeholder:text-black/10 rounded-none focus:ring-0 focus:border-primary transition-all"
                                         placeholder="000-000-0000" type="tel" />
                                 </div>

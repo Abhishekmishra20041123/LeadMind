@@ -10,7 +10,7 @@ from bson import ObjectId
 
 # Import dependencies and DB collections
 from dependencies import get_current_user
-from db import batches_collection, leads_collection, pipeline_collection, email_logs_collection, agent_activity_collection
+from db import batches_collection, leads_collection, pipeline_collection, email_logs_collection, agent_activity_collection, companies_collection
 
 # Import Ollama wrapper
 from api.agents import OllamaWrapper
@@ -137,7 +137,18 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                 else:
                     email_history = []
                     
-                state = {"lead": lead_dict, "email_history": email_history}
+                # Fetch company details for operator info
+                company = await companies_collection.find_one({"_id": company_id})
+                operator_info = {}
+                if company:
+                    operator_info = {
+                        "operator_name": company.get("contact_person_name", company.get("company_name", "Unknown Operator")),
+                        "operator_company": company.get("company_name", "Unknown Company"),
+                        "operator_website": company.get("domain", "") or company.get("website", ""),
+                        "operator_email": company.get("email", "")
+                    }
+                    
+                state = {"lead": lead_dict, "email_history": email_history, "operator_info": operator_info}
                 company_name = lead_dict.get('company', 'Unknown')
                 print(f"\\n[Processing] Lead {lead_id} ({company_name}) through LangGraph pipeline...")
                 await push_batch_log(batch_id, f"Initializing pipeline for {company_name} (Lead ID: {lead_id})")
@@ -172,6 +183,10 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                     "region": lead_dict.get("region"),
                                     "lead_source": lead_dict.get("lead_source"),
                                     "industry": lead_dict.get("industry")
+                                },
+                                "contact": {
+                                    "email": lead_dict.get("email", ""),
+                                    "linkedin": lead_dict.get("linkedin", "")
                                 },
                                 "activity": {
                                     "visits": lead_dict.get("visits", 0),

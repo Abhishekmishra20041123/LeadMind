@@ -6,25 +6,25 @@ Current lead to analyze:
 
 Based on this individual lead's data, generate an analysis in the following STRICT JSON format:
 
-{{
+{
     "quality_indicators": [
-        {{
+        {
             "metric": "Industry Match",
             "value": "High",
             "reasoning": "SaaS companies are a core part of our ICP."
-        }},
-        {{
+        },
+        {
             "metric": "Website Engagement",
             "value": "Medium",
             "reasoning": "12 visits is above average, but time on site is normal."
-        }}
+        }
     ],
-    "recommendation": {{
+    "recommendation": {
         "segment": "Enterprise Tech",
         "strategy": "Value-based approach focusing on scalability",
         "expected_impact": 0.85
-    }}
-}}
+    }
+}
 
 YOU MUST:
 1. Respond with ONLY a valid JSON object.

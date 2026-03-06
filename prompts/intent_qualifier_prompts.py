@@ -15,23 +15,23 @@ Email Interaction History:
 Analyze the behavioral patterns, email engagement, and demographics of this lead. Then, assign an intent score and identify the key signals that drove this score.
 
 IMPORTANT: Return a VALID JSON object with exactly this structure. DO NOT wrap the response in markdown blocks like ```json.
-{{
+{
   "intent_score": 75.5,
   "key_signals": [
-    {{
+    {
       "signal": "Replied to two outbound emails",
       "strength": "High"
-    }},
-    {{
+    },
+    {
       "signal": "Visited pricing page 4 times",
       "strength": "High"
-    }}
+    }
   ],
-  "recommendation": {{
+  "recommendation": {
     "next_best_action": "Schedule a direct demo call",
     "urgency": "High"
-  }}
-}}
+  }
+}
 
 Rules:
 1. "intent_score" must be a float between 0.0 and 100.0. Higher means stronger buying intent.

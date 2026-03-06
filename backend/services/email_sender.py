@@ -15,11 +15,20 @@ class EmailService:
             raise ValueError("Company not found")
             
         settings = company.get("settings", {})
-        smtp_host = settings.get("smtp_host", os.getenv("SMTP_HOST", "smtp.gmail.com"))
-        smtp_port = int(settings.get("smtp_port", os.getenv("SMTP_PORT", 587)))
-        smtp_user = settings.get("smtp_user", os.getenv("SMTP_USER"))
-        smtp_pass = settings.get("smtp_pass", os.getenv("SMTP_PASS"))
-        from_email = settings.get("from_email", smtp_user or "noreply@strategicgrid.ai")
+        smtp_host = settings.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
+        
+        # Handle empty strings gracefully for the port
+        raw_port = settings.get("smtp_port") or os.getenv("SMTP_PORT", 587)
+        try:
+            smtp_port = int(raw_port)
+        except (ValueError, TypeError):
+            smtp_port = 587
+            
+        smtp_user = settings.get("smtp_user") or os.getenv("SMTP_USER")
+        smtp_pass = settings.get("smtp_pass") or os.getenv("SMTP_PASS")
+        
+        default_company_email = company.get("email", "noreply@strategicgrid.ai")
+        from_email = settings.get("from_email", smtp_user or default_company_email)
         from_name = settings.get("from_name", company.get("company_name", "Sales Agent"))
         
         if not smtp_user or not smtp_pass:

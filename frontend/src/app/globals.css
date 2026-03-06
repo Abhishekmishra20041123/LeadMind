@@ -26,6 +26,7 @@
     background-image:
         linear-gradient(to right, #F0F0F0 1px, transparent 1px),
         linear-gradient(to bottom, #F0F0F0 1px, transparent 1px);
+    animation: grid-scroll 3s linear infinite;
 }
 
 .vertical-text {

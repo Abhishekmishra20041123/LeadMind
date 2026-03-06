@@ -30,7 +30,7 @@ async def process_followups():
             
             # Fetch lead to get target email
             lead = await leads_collection.find_one({"lead_id": lead_id, "company_id": company_id})
-            to_email = lead.get("email", "mock@lead.com") if lead else "mock@lead.com"
+            to_email = lead.get("contact", {}).get("email", "mock@lead.com") if lead else "mock@lead.com"
             
             # Dispatch
             await EmailService.send_email(

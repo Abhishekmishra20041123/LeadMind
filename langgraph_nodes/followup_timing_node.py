@@ -4,6 +4,7 @@ LangGraph workflow for follow-up timing optimization.
 """
 
 import json
+from datetime import datetime, timedelta
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 
@@ -60,9 +61,13 @@ def generate_strategy(state: Dict[str, Any], llm=None, prompt_templates=None) ->
     }
     
     try:
-        prompt = prompt_templates["generate_strategy"].format(
-            context=json.dumps(context, indent=2)
-        )
+        current_date = datetime.utcnow().strftime("%Y-%m-%d")
+        # Use manual string replacement instead of .format() to avoid
+        # Python misinterpreting JSON curly braces as format placeholders
+        context_json = json.dumps(context, indent=2)
+        prompt = prompt_templates["generate_strategy"]
+        prompt = prompt.replace("{current_date}", current_date)
+        prompt = prompt.replace("{context}", context_json)
         
         response = llm.generate_content(prompt)
         response_text = response.text.strip()
@@ -76,9 +81,14 @@ def generate_strategy(state: Dict[str, Any], llm=None, prompt_templates=None) ->
                 
         strategy = json.loads(response_text)
         
+        fallback_date = (datetime.utcnow() + timedelta(days=3)).strftime("%Y-%m-%d")
+        timing_dict = strategy.get("timing", {})
+        if "2025" in str(timing_dict.get("recommended_date", "")):
+            timing_dict["recommended_date"] = fallback_date
+        
         return {
             **state,
-            "timing": strategy.get("timing", {}),
+            "timing": timing_dict,
             "approach": strategy.get("approach", {}),
             "engagement_prediction": strategy.get("engagement_prediction", {}),
             "status": "completed"
@@ -86,12 +96,13 @@ def generate_strategy(state: Dict[str, Any], llm=None, prompt_templates=None) ->
         
     except Exception as e:
         print(f"Error parsing response: {str(e)}")
+        fallback_date = (datetime.utcnow() + timedelta(days=3)).strftime("%Y-%m-%d")
         return {
             **state,
             "status": "error",
             "error": str(e),
             "timing": {
-                "recommended_date": "2025-04-15",
+                "recommended_date": fallback_date,
                 "send_time": "10:00",
                 "optimal_time_window": "Error fallback",
                 "reasoning": str(e)

@@ -17,11 +17,11 @@ Craft a personalized email that:
 
 OUTPUT FORMAT:
 Return a strictly valid JSON object with exactly these keys:
-{{
+{
     "subject": "Email subject line",
     "personalization_factors": ["List of personalization factors used"],
     "email_preview": "Full email body"
-}}
+}
 
 GUIDELINES:
 - Keep subject line short and compelling
@@ -29,8 +29,9 @@ GUIDELINES:
 - Use natural, conversational tone
 - Focus on their specific needs/pain points
 - End with clear next steps
-- SIGN OFF YOUR EMAIL USING THE OPERATOR'S NAME AND COMPANY provided in Operator Info (e.g. "Best, John Doe | Acme Corp").
-- MENTION THE OPERATOR'S WEBSITE URL somewhere natural in the pitch or signature.
+- SIGN OFF YOUR EMAIL USING THE OPERATOR'S NAME AND COMPANY provided in Operator Info (e.g. "Best, " + operator_name + " | " + operator_company).
+- MENTION THE OPERATOR'S WEBSITE URL (operator_website) somewhere natural in the pitch or signature.
 - DO NOT wrap your response in markdown blocks!
 """
 }
+

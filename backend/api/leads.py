@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Body, Depends
 import pymongo
 from bson import ObjectId
 
-from db import leads_collection, agent_activity_collection
+from db import leads_collection, agent_activity_collection, email_logs_collection, followup_queue_collection
 from dependencies import get_current_user
 
 router = APIRouter()
@@ -217,6 +217,7 @@ async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=
 
     return {
         "lead_id": record_id,
+        "email": lead_doc.get("contact", {}).get("email", ""),
         "profile": {
             "name": name,
             "title": profile.get("title", "Unknown"),
@@ -286,7 +287,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
     """Send approved email and log to CRM"""
     subject = payload.get("subject")
     content = payload.get("content")
-    to_email = payload.get("to_email", "mock@lead.com")
+    to_email = payload.get("to_email", "23102076@apsit.edu.in")
     
     if not subject or not content:
         raise HTTPException(status_code=400, detail="Missing subject or content")
@@ -299,21 +300,26 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
     # 1. Send Email
     from services.email_sender import EmailService
     try:
+        print(f"Attempting to send email to {to_email}")
         await EmailService.send_email(
             company_id=user["company_id"],
             to_address=to_email,
             subject=subject,
             html_content=content
         )
+        print("Email sent successfully")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Email sending failed with error: {e}")
         raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(e)}")
         
     # 2. Update CRM state
-    from db import email_logs_collection
     now = datetime.utcnow()
     
     await leads_collection.update_one(query, {
         "$set": {
+            "status": "Email Dispatched",
             "crm.email_sent": True,
             "updated_at": now
         }
@@ -340,6 +346,69 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
         "sent_at": now,
         "status": "delivered"
     })
+    
+    # 5. AUTO-SCHEDULE FOLLOW-UP using AI timing data
+    try:
+        from datetime import timedelta
+        timing_data = lead_doc.get("intel", {}).get("timing", {})
+        recommended_date = timing_data.get("recommended_date", "")
+        send_time = timing_data.get("send_time", "10:00")
+
+        if recommended_date:
+            try:
+                scheduled_at = datetime.strptime(
+                    f"{recommended_date} {send_time}", "%Y-%m-%d %H:%M"
+                )
+            except ValueError:
+                scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+        else:
+            scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+
+        # Build a quick follow-up reminder email
+        lead_name = lead_doc.get("profile", {}).get("name", "there")
+        lead_company = lead_doc.get("profile", {}).get("company", "your company")
+        followup_subject = f"Quick follow-up: {subject}"
+        followup_content = f"""<p>Hi {lead_name},</p>
+<p>Just following up on my previous email regarding a potential opportunity for {lead_company}.</p>
+<p>I wanted to make sure it didn't get lost in your inbox. Would love to connect and explore if there's a fit.</p>
+<p>Feel free to reply here or grab a time that works for you.</p>
+<p>Best regards</p>"""
+
+        await followup_queue_collection.insert_one({
+            "company_id": user["company_id"],
+            "lead_id": record_id,
+            "batch_id": lead_doc.get("batch_id"),
+            "subject": followup_subject,
+            "content": followup_content,
+            "status": "pending",
+            "scheduled_at": scheduled_at,
+            "created_at": now,
+            "auto_scheduled": True
+        })
+        
+        # Update CRM timeline
+        await leads_collection.update_one(query, {
+            "$set": {
+                "crm.email_sent": True,
+                "crm.timeline.first_contact": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "crm.timeline.next_followup": scheduled_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+            }
+        })
+        
+        await agent_activity_collection.insert_one({
+            "company_id": user["company_id"],
+            "batch_id": lead_doc.get("batch_id"),
+            "lead_id": record_id,
+            "agent": "SCHEDULER",
+            "action": f"Auto-scheduled follow-up for {scheduled_at.strftime('%Y-%m-%d %H:%M')} UTC",
+            "status": "QUEUED",
+            "timestamp": now
+        })
+        print(f"[Auto-Schedule] Follow-up queued for lead {record_id} at {scheduled_at}")
+        
+    except Exception as e:
+        print(f"[Auto-Schedule] Warning: Could not auto-schedule follow-up for {record_id}: {e}")
+        # Non-fatal — the initial email was already sent successfully
     
     return {"status": "success", "message": "Email sent and logged successfully"}
 

@@ -62,10 +62,10 @@ def generate_insights(state, llm=None, prompt_templates=None):
         lead_json = json.dumps(state.get("lead", {}), indent=2)
         email_json = json.dumps(state.get("email_history", []), indent=2)
         
-        prompt = prompt_templates["generate_insights"].format(
-            lead_data=lead_json,
-            email_data=email_json
-        )
+        # Use manual string replacement to avoid JSON curly braces breaking .format()
+        prompt = prompt_templates["generate_insights"]
+        prompt = prompt.replace("{lead_data}", lead_json)
+        prompt = prompt.replace("{email_data}", email_json)
         
         response = llm.generate_content(prompt)
         response_text = response.text.strip()

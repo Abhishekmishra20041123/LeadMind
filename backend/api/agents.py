@@ -409,6 +409,11 @@ async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user
         # Construct graph for the requested node
         if node == "email_strategy":
             graph = create_email_strategy_graph(llm, email_strategy_prompts)
+            from langgraph_nodes.followup_timing_node import create_followup_timing_graph
+            from prompts.followup_timing_prompts import followup_timing_prompts
+            timing_graph = create_followup_timing_graph(llm, followup_timing_prompts)
+        else:
+            timing_graph = None
             
         print(f"\\n[Regenerate] Running {node} for Lead {lead_id}...")
         
@@ -418,12 +423,20 @@ async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user
             
         new_state = await asyncio.to_thread(run_node, graph, state)
         
+        # Also run timing node if applicable
+        if timing_graph:
+            timing_state = await asyncio.to_thread(run_node, timing_graph, new_state)
+            new_state.update(timing_state)
+        
         # Map output to updates
         update_data = {}
         if node == "email_strategy":
             update_data["intel.email.subject"] = new_state.get("subject", "")
             update_data["intel.email.preview"] = new_state.get("email_preview", "")
             update_data["intel.email.personalization_factors"] = new_state.get("personalization_factors", [])
+            update_data["intel.timing"] = new_state.get("timing", {})
+            update_data["intel.approach"] = new_state.get("approach", {})
+            update_data["intel.engagement_prediction"] = new_state.get("engagement_prediction", {})
             
         from datetime import datetime
         now = datetime.utcnow()
@@ -449,7 +462,10 @@ async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user
         return {
             "status": "success",
             "subject": update_data.get("intel.email.subject"),
-            "draft": update_data.get("intel.email.preview")
+            "draft": update_data.get("intel.email.preview"),
+            "timing": update_data.get("intel.timing"),
+            "approach": update_data.get("intel.approach"),
+            "engagement_prediction": update_data.get("intel.engagement_prediction")
         }
         
     except Exception as e:

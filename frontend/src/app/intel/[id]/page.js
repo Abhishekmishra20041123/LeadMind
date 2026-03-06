@@ -57,7 +57,7 @@ export default function IntelPage({ params }) {
                 body: JSON.stringify({
                     subject: target.subject,
                     content: contentBody,
-                    to_email: target.email || "mock@lead.com" // assumes lead email is fetched
+                    to_email: target.email || "23102076@apsit.edu.in" // assumes lead email is fetched
                 })
             });
             if (!res.ok) throw new Error("Failed to dispatch email");
@@ -88,6 +88,7 @@ export default function IntelPage({ params }) {
                 // Map the new structured backend JSON to the expected visual template
                 const fullData = {
                     id: data.lead_id,
+                    email: data.email || "",
                     name: data.profile?.name || "Unknown",
                     title: data.profile?.title || "Unknown",
                     company: data.profile?.company || "Unknown",
@@ -316,17 +317,43 @@ export default function IntelPage({ params }) {
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Windows Widget Style at bottom */}
-                                        <div className="absolute bottom-6 left-6 right-6 border border-ink p-3 bg-mute/50">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="font-mono text-[10px] uppercase">Timeline Logs</span>
-                                                <span className="w-2 h-2 bg-data-green rounded-full animate-pulse"></span>
-                                            </div>
-                                            <div className="font-mono text-xs text-ink/60">
-                                                Init: {target.timing.timeline?.first_contact ? new Date(target.timing.timeline.first_contact).toLocaleDateString() : "N/A"}<br />
-                                                Next: {target.timing.timeline?.next_followup || "N/A"}
-                                            </div>
-                                        </div>
+                                        {/* Timeline Logs Widget */}
+                                        {(() => {
+                                            const executedLog = target.logs?.find(l =>
+                                                l.agent === "SCHEDULER" && l.action?.includes("Executed")
+                                            );
+                                            const dispatched = !!executedLog;
+                                            return (
+                                                <div className={`absolute bottom-6 left-6 right-6 border p-3 transition-all duration-500 ${dispatched ? "border-data-green bg-data-green/10" : "border-ink bg-mute/50"
+                                                    }`}>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="font-mono text-[10px] uppercase">
+                                                            {dispatched ? "Follow-up Status" : "Timeline Logs"}
+                                                        </span>
+                                                        {dispatched
+                                                            ? <span className="material-symbols-outlined text-data-green text-sm">check_circle</span>
+                                                            : <span className="w-2 h-2 bg-data-green rounded-full animate-pulse"></span>
+                                                        }
+                                                    </div>
+                                                    {dispatched ? (
+                                                        <div className="font-mono text-xs">
+                                                            <span className="text-data-green font-bold uppercase tracking-wider">FOLLOW-UP DISPATCHED ✓</span><br />
+                                                            <span className="text-ink/50">{executedLog.time} — {executedLog.action?.replace("Executed scheduled follow-up: ", "")}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="font-mono text-xs text-ink/60">
+                                                            Init: {target.timing.timeline?.first_contact ? new Date(target.timing.timeline.first_contact).toLocaleDateString() : "N/A"}<br />
+                                                            Next: {target.status === "Email Dispatched"
+                                                                ? target.timing.timeline?.next_followup
+                                                                    ? new Date(target.timing.timeline.next_followup).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                                    : "N/A"
+                                                                : "Pending Dispatch"}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
                                     </div>
                                 </div>
                             </div>

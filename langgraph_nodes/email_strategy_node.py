@@ -49,12 +49,12 @@ def generate_email(state, llm=None, prompt_templates=None):
     
     
     try:
-        prompt = prompt_templates["craft_email"].format(
-            lead=lead_json,
-            intent_signals=intent_signals,
-            company_info=company_info,
-            operator_info=operator_info
-        )
+        # Use manual string replacement to avoid JSON curly braces breaking .format()
+        prompt = prompt_templates["craft_email"]
+        prompt = prompt.replace("{lead}", lead_json)
+        prompt = prompt.replace("{intent_signals}", intent_signals)
+        prompt = prompt.replace("{company_info}", company_info)
+        prompt = prompt.replace("{operator_info}", operator_info)
         
         response = llm.generate_content(prompt)
         response_text = response.text.strip()

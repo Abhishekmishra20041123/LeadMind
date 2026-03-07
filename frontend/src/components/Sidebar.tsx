@@ -7,7 +7,6 @@ export default function Sidebar() {
     const navItems = [
         { name: "Mission Control", path: "/", icon: "dashboard" },
         { name: "The Ledger", path: "/ledger", icon: "table_chart" },
-        { name: "Intelligence Report", path: "/intel/8X992", icon: "psychology" },
         { name: "Upload Protocol", path: "/upload", icon: "cloud_upload" },
         { name: "Agent Monitor", path: "/agents", icon: "memory", badge: "RUNNING" },
         { name: "Settings", path: "/settings", icon: "settings" },

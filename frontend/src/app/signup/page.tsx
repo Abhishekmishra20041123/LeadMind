@@ -14,6 +14,8 @@ export default function SignupPage() {
         companyName: '',
         companyWebsiteUrl: '',
         country: '',
+        businessType: '',
+        companyDescription: '',
         contactPersonName: '',
         email: '',
         countryCode: '+1',
@@ -22,7 +24,7 @@ export default function SignupPage() {
         confirmPassword: ''
     });
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         let value = e.target.value;
         if (e.target.name === 'phoneNumber') {
             // Only allow digits
@@ -57,6 +59,8 @@ export default function SignupPage() {
                 company_name: formData.companyName,
                 company_website_url: formData.companyWebsiteUrl,
                 country: formData.country,
+                business_type: formData.businessType || null,
+                company_description: formData.companyDescription || null,
                 contact_person_name: formData.contactPersonName,
                 email: formData.email,
                 phone_number: `${formData.countryCode} ${formData.phoneNumber}`,
@@ -174,6 +178,37 @@ export default function SignupPage() {
                                         <span className="material-symbols-outlined text-slate-900">expand_more</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="relative group">
+                                <label className="absolute -top-3 left-4 bg-white px-2 font-mono text-[11px] font-bold text-slate-900 uppercase tracking-widest z-10 transition-all group-focus-within:text-primary">
+                                    Business Type
+                                </label>
+                                <div className="relative">
+                                    <select name="businessType" value={formData.businessType} onChange={handleChange}
+                                        className="w-full h-16 border-2 border-slate-900 rounded-none px-6 font-mono text-sm tracking-tight focus:ring-0 focus:border-primary text-slate-900 bg-transparent appearance-none uppercase cursor-pointer">
+                                        <option value="">SELECT BUSINESS TYPE</option>
+                                        <option value="SaaS">SAAS</option>
+                                        <option value="E-Commerce">E-COMMERCE</option>
+                                        <option value="Agency">AGENCY</option>
+                                        <option value="Finance">FINANCE</option>
+                                        <option value="Healthcare">HEALTHCARE</option>
+                                        <option value="Manufacturing">MANUFACTURING</option>
+                                        <option value="Other">OTHER</option>
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                                        <span className="material-symbols-outlined text-slate-900">expand_more</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="relative group">
+                                <label className="absolute -top-3 left-4 bg-white px-2 font-mono text-[11px] font-bold text-slate-900 uppercase tracking-widest z-10 transition-all group-focus-within:text-primary">
+                                    Company Description
+                                </label>
+                                <textarea name="companyDescription" value={formData.companyDescription} onChange={handleChange} rows={3}
+                                    className="w-full border-2 border-slate-900 rounded-none px-6 py-4 font-mono text-sm tracking-tight focus:ring-0 focus:border-primary placeholder:text-slate-300 text-slate-900 bg-transparent resize-none uppercase"
+                                    placeholder="BRIEFLY DESCRIBE WHAT YOUR COMPANY DOES..." />
                             </div>
 
                             <div className="bg-slate-50 border-l-4 border-primary p-4 flex gap-4">

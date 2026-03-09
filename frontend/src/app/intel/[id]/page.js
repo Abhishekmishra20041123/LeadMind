@@ -17,6 +17,7 @@ export default function IntelPage({ params }) {
     const [loading, setLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
+    const [engagement, setEngagement] = useState(null);
 
     const handleRegenerate = async () => {
         if (!target) return;
@@ -44,9 +45,12 @@ export default function IntelPage({ params }) {
 
     const handleApproveEmail = async () => {
         if (!target) return;
+        if (target.emailSent) {
+            alert("Email was already sent to this lead. Use force send if you need to re-send.");
+            return;
+        }
         setIsSending(true);
         try {
-            // Get text from the content editable div or structured draft
             const contentBody = document.getElementById("email-editor")?.innerHTML || target.draft.map(d => d.content).join("");
             const res = await fetch(`${API}/leads/${id}/approve-email`, {
                 method: "POST",
@@ -57,12 +61,18 @@ export default function IntelPage({ params }) {
                 body: JSON.stringify({
                     subject: target.subject,
                     content: contentBody,
-                    to_email: target.email || "23102076@apsit.edu.in" // assumes lead email is fetched
+                    to_email: target.email || "mishraabhishek1703@gmail.com"
                 })
             });
+            if (res.status === 409) {
+                const err = await res.json();
+                const sentDate = err.detail?.sent_at ? new Date(err.detail.sent_at).toLocaleString() : "earlier";
+                alert(`This email was already sent on ${sentDate}. No duplicate sent.`);
+                window.location.reload();
+                return;
+            }
             if (!res.ok) throw new Error("Failed to dispatch email");
             alert("Email dispatched successfully and logged to CRM!");
-            // Refresh details
             window.location.reload();
         } catch (e) {
             console.error("Email dispatch failed", e);
@@ -75,11 +85,10 @@ export default function IntelPage({ params }) {
     useEffect(() => {
         const queryParams = batchId ? `?batch_id=${batchId}` : '';
         const token = localStorage.getItem("access_token");
-        fetch(`${API}/leads/${id}${queryParams}`, {
-            headers: {
-                "Authorization": `Bearer ${token}`
-            }
-        })
+        const headers = { "Authorization": `Bearer ${token}` };
+
+        // Fetch lead details
+        fetch(`${API}/leads/${id}${queryParams}`, { headers })
             .then(res => {
                 if (!res.ok) throw new Error("Lead not found");
                 return res.json();
@@ -116,7 +125,9 @@ export default function IntelPage({ params }) {
                     ],
                     subject: data.agents?.message?.subject || "No Subject",
                     personalizationFactors: data.agents?.message?.personalization_factors || [],
-                    logs: data.agents?.crm?.logs || []
+                    logs: data.agents?.crm?.logs || [],
+                    emailSent: data.email_sent || false,
+                    lastSentAt: data.last_sent_at || null,
                 };
                 setTarget(fullData);
                 setLoading(false);
@@ -125,6 +136,22 @@ export default function IntelPage({ params }) {
                 console.error("Failed to fetch lead data:", err);
                 setLoading(false);
             });
+
+        // Fetch email engagement stats
+        fetch(`${API}/leads/${id}/email-engagement`, { headers })
+            .then(res => res.json())
+            .then(data => setEngagement(data))
+            .catch(err => console.error("Failed to fetch engagement:", err));
+
+        // Auto-refresh engagement stats every 5 seconds for a "live" feel
+        const interval = setInterval(() => {
+            fetch(`${API}/leads/${id}/email-engagement`, { headers })
+                .then(res => res.json())
+                .then(data => setEngagement(data))
+                .catch(() => { });
+        }, 5000);
+
+        return () => clearInterval(interval);
     }, [id, batchId]);
 
     if (loading || !target) {
@@ -223,6 +250,51 @@ export default function IntelPage({ params }) {
                             </div>
                         </section>
 
+                        {/* Middle Section: Email Engagement Tracker (Always visible if email sent) */}
+                        {engagement && engagement.email_sent && (
+                            <section className="bg-paper border border-ink p-6 relative">
+                                <div className="absolute top-0 right-0 bg-primary/10 text-primary px-3 py-1 font-mono text-xs uppercase tracking-widest border-b border-l border-primary/20">
+                                    LIVE TRACKING
+                                </div>
+                                <div className="flex items-center gap-2 mb-6">
+                                    <span className="material-symbols-outlined text-ink">query_stats</span>
+                                    <h3 className="font-display font-bold text-lg uppercase tracking-wide">Email Engagement (Live)</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 divide-y md:divide-y-0 md:divide-x divide-ink/20 font-mono">
+                                    <div className="flex flex-col gap-1 pr-4">
+                                        <span className="text-xs text-ink/50 uppercase">Open Rate</span>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-3xl font-bold ${engagement.open_count > 0 ? "text-primary" : "text-ink"}`}>
+                                                {engagement.open_count > 0 ? "100%" : "0%"}
+                                            </span>
+                                            <span className="text-sm text-ink/50">({engagement.open_count} opens)</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1 md:pl-6 pr-4">
+                                        <span className="text-xs text-ink/50 uppercase">Click Rate</span>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-3xl font-bold ${engagement.click_count > 0 ? "text-data-green" : "text-ink"}`}>
+                                                {engagement.click_count > 0 ? "100%" : "0%"}
+                                            </span>
+                                            <span className="text-sm text-ink/50">({engagement.click_count} clicks)</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1 md:pl-6 pr-4">
+                                        <span className="text-xs text-ink/50 uppercase">First Activity</span>
+                                        <span className="text-sm font-bold text-ink">
+                                            {engagement.first_opened_at ? new Date(engagement.first_opened_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—"}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1 md:pl-6">
+                                        <span className="text-xs text-ink/50 uppercase">Last Activity</span>
+                                        <span className="text-sm font-bold text-ink">
+                                            {engagement.last_opened_at ? new Date(engagement.last_opened_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
                         {/* Main Grid: 3 Columns */}
                         <section className="grid grid-cols-12 gap-6 min-h-[600px]">
                             {/* Column 1: Research (Agent 1) */}
@@ -233,12 +305,40 @@ export default function IntelPage({ params }) {
                                         <span className="material-symbols-outlined text-ink text-sm">person_search</span>
                                     </div>
                                     <div className="p-6 flex flex-col gap-6 flex-1">
-                                        {/* Photo - using a solid color as placeholder for the external image */}
-                                        <div className="w-full aspect-square bg-mute border border-ink relative overflow-hidden group transition-all duration-500 flex items-center justify-center text-ink/20">
-                                            <span className="font-display font-bold text-[96px] text-ink/30 group-hover:scale-110 transition-transform">
-                                                {target?.name ? target.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : ""}
-                                            </span>
-                                            <div className="absolute bottom-0 left-0 bg-ink text-paper px-2 py-1 font-mono text-xs">IMG_REF_001</div>
+                                        {/* Identity Card — replaces empty avatar box */}
+                                        <div className="w-full border border-ink bg-ink text-paper p-5 flex flex-col gap-4 relative overflow-hidden">
+                                            {/* Decorative grid lines */}
+                                            <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 24px, #fff 24px, #fff 25px), repeating-linear-gradient(90deg, transparent, transparent 24px, #fff 24px, #fff 25px)' }} />
+                                            {/* Initials badge */}
+                                            <div className="relative flex items-center gap-4">
+                                                <div className="w-16 h-16 bg-primary flex items-center justify-center shrink-0 shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)]">
+                                                    <span className="font-display font-bold text-3xl text-white leading-none">
+                                                        {target?.name ? target.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : "—"}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5 min-w-0">
+                                                    <span className="font-mono text-[9px] uppercase tracking-widest text-paper/40">Subject</span>
+                                                    <span className="font-display font-bold text-lg leading-tight text-paper truncate">{target.name}</span>
+                                                    <span className="font-mono text-[10px] text-paper/60 truncate">{target.title}</span>
+                                                </div>
+                                            </div>
+                                            {/* Key data rows */}
+                                            <div className="relative flex flex-col gap-2 pt-3 border-t border-paper/10 font-mono text-[10px]">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-paper/40 uppercase tracking-wider">Company</span>
+                                                    <span className="text-paper font-bold uppercase">{target.company}</span>
+                                                </div>
+                                                {target.email && (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-paper/40 uppercase tracking-wider">Email</span>
+                                                        <span className="text-paper truncate max-w-[140px]">{target.email}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-paper/40 uppercase tracking-wider">Status</span>
+                                                    <span className="text-primary font-bold">{target.status || "Active"}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                         {/* Bio */}
                                         <div className="flex flex-col gap-2">
@@ -404,17 +504,59 @@ export default function IntelPage({ params }) {
                                                 <span className={`material-symbols-outlined text-lg ${isRegenerating ? 'animate-spin' : ''}`}>autorenew</span>
                                                 {isRegenerating ? 'WORKING...' : 'REGENERATE'}
                                             </button>
-                                            <div className="flex gap-2">
+                                            <div className="flex items-center gap-2">
+                                                {/* Email-sent badge + re-send option */}
+                                                {target.emailSent && (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 border border-data-green/40 bg-data-green/10">
+                                                            <span className="material-symbols-outlined text-data-green text-sm">mark_email_read</span>
+                                                            <div className="font-mono text-[10px] leading-tight">
+                                                                <div className="text-data-green font-bold uppercase tracking-wider">Email Sent</div>
+                                                                {target.lastSentAt && (
+                                                                    <div className="text-ink/40">{new Date(target.lastSentAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm("This lead has already received an email. Send again anyway?")) return;
+                                                                setIsSending(true);
+                                                                try {
+                                                                    const contentBody = document.getElementById("email-editor")?.innerHTML || target.draft.map(d => d.content).join("");
+                                                                    const res = await fetch(`${API}/leads/${id}/approve-email`, {
+                                                                        method: "POST",
+                                                                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
+                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true })
+                                                                    });
+                                                                    if (!res.ok) throw new Error("Failed");
+                                                                    alert("Email re-sent successfully.");
+                                                                    window.location.reload();
+                                                                } catch (e) { alert("Re-send failed: " + e.message); }
+                                                                finally { setIsSending(false); }
+                                                            }}
+                                                            disabled={isSending}
+                                                            title="Force re-send (bypasses duplicate guard)"
+                                                            className="flex items-center gap-2 px-4 py-2 border border-amber-500 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white font-display font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        >
+                                                            <span className="material-symbols-outlined text-lg">refresh</span>
+                                                            RE-SEND
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 <button className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm">
                                                     <span className="material-symbols-outlined text-lg">content_copy</span>
                                                     COPY
                                                 </button>
                                                 <button
                                                     onClick={handleApproveEmail}
-                                                    disabled={isSending}
-                                                    className="flex items-center gap-2 px-6 py-2 bg-primary text-white border border-ink hover:bg-ink transition-colors font-display font-bold text-sm shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50 disabled:cursor-not-allowed">
-                                                    <span className="material-symbols-outlined text-lg">{isSending ? 'hourglass_empty' : 'send'}</span>
-                                                    {isSending ? 'DISPATCHING...' : 'APPROVE & LOG'}
+                                                    disabled={isSending || target.emailSent}
+                                                    title={target.emailSent ? "Email already sent to this lead" : "Approve and send email"}
+                                                    className={`flex items-center gap-2 px-6 py-2 border border-ink font-display font-bold text-sm transition-colors ${target.emailSent
+                                                        ? 'bg-mute text-ink/40 cursor-not-allowed'
+                                                        : 'bg-primary text-white hover:bg-ink shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]'
+                                                        } disabled:opacity-50 disabled:cursor-not-allowed`}>
+                                                    <span className="material-symbols-outlined text-lg">{isSending ? 'hourglass_empty' : target.emailSent ? 'done_all' : 'send'}</span>
+                                                    {isSending ? 'DISPATCHING...' : target.emailSent ? 'ALREADY SENT' : 'APPROVE & LOG'}
                                                 </button>
                                             </div>
                                         </div>

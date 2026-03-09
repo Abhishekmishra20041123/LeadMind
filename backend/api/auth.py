@@ -97,6 +97,8 @@ async def get_my_profile(user=Depends(get_current_user)):
         "contact_person_name": company.get("contact_person_name", ""),
         "phone_number": company.get("phone_number", ""),
         "api_key": company.get("api_key", ""),
+        "business_type": company.get("business_type", ""),
+        "company_description": company.get("company_description", ""),
         "settings": company.get("settings", {})
     }
 
@@ -107,8 +109,9 @@ async def update_settings(payload: dict = Body(...), user=Depends(get_current_us
     
     # Top level string fields
     top_level_fields = [
-        "company_name", "company_website_url", "country", 
-        "contact_person_name", "email", "phone_number", "api_key"
+        "company_name", "company_website_url", "country",
+        "contact_person_name", "email", "phone_number", "api_key",
+        "business_type", "company_description"
     ]
     
     for field in top_level_fields:

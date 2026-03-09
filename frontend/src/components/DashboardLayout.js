@@ -1,8 +1,31 @@
 "use client";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function DashboardLayout({ children }) {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      router.replace("/login");
+    } else {
+      setIsAuthorized(true);
+    }
+  }, [router]);
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-ink text-paper font-mono text-sm uppercase">
+        <span className="material-symbols-outlined animate-spin mr-2">refresh</span>
+        Authenticating...
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen overflow-hidden text-ink bg-mute">
       <Header />

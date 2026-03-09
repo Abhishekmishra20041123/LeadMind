@@ -22,10 +22,17 @@ export default function MissionControl() {
         fetch(`${API}/dashboard/pipeline`, { headers }).then(r => r.json()).then(d => setPipeline(d.stages || [])).catch(() => { });
     }, []);
 
+    function formatPipelineValue(val) {
+        if (!val) return "$0";
+        if (val >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
+        if (val >= 1e3) return `$${(val / 1e3).toFixed(1)}K`;
+        return `$${val.toLocaleString()}`;
+    }
+
     const kpis = [
         { label: "Total Leads", value: stats?.total_leads?.toLocaleString() || "0", icon: "groups", trend: "0%", trendUp: true, subtext: "vs last week", color: "text-ink/60", valueColor: "text-ink" },
         { label: "High Intent", value: stats?.high_intent || "0", icon: "local_fire_department", trend: "0 new", trendUp: true, subtext: "since login", color: "text-primary", valueColor: "text-primary" },
-        { label: "Pipeline Value", value: stats ? `$${(stats.pipeline_value / 1e6).toFixed(1)}M` : "$0M", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Pipeline Value", value: stats ? formatPipelineValue(stats.pipeline_value) : "$0", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
         { label: "Avg Score", value: `${stats?.avg_score || 0}%`, icon: "analytics", bar: parseInt(stats?.avg_score || 0), color: "text-ink/60", valueColor: "text-ink" },
     ];
 
@@ -102,13 +109,11 @@ export default function MissionControl() {
                         <div className="flex flex-col gap-4">
                             {targets.map((t, i) => (
                                 <div key={i} className="bg-paper border border-ink p-0 flex flex-col sm:flex-row group hover:shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] transition-all cursor-pointer">
-                                    <div className="w-full sm:w-48 h-48 sm:h-auto border-b sm:border-b-0 sm:border-r border-ink relative overflow-hidden shrink-0 bg-mute flex text-ink/30 items-center justify-center">
-                                        <span className="font-display font-bold text-[64px] group-hover:scale-110 transition-transform">
-                                            {t.name ? t.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : ""}
-                                        </span>
-                                        {t.type && (
-                                            <div className="absolute top-2 left-2 bg-primary text-white font-mono text-[10px] px-2 py-0.5 font-bold uppercase">{t.type}</div>
-                                        )}
+                                    {/* Accent bar with initials badge — replaces empty avatar placeholder */}
+                                    <div className="w-2 sm:w-3 bg-ink shrink-0 relative flex items-center justify-center">
+                                        <div className="absolute -right-5 w-10 h-10 bg-primary text-white flex items-center justify-center font-display font-bold text-sm shadow-[2px_2px_0px_0px_rgba(10,10,10,1)] z-10">
+                                            {t.name ? t.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : "—"}
+                                        </div>
                                     </div>
                                     <div className="p-6 flex-1 flex flex-col justify-between">
                                         <div className="flex justify-between items-start">

@@ -1,12 +1,17 @@
 import os
 import re
+import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query, Body, Depends
 import pymongo
 from bson import ObjectId
 
-from db import leads_collection, agent_activity_collection, email_logs_collection, followup_queue_collection
+from db import (
+    leads_collection, agent_activity_collection, email_logs_collection,
+    followup_queue_collection, companies_collection,
+    email_opens_collection, email_events_collection,
+)
 from dependencies import get_current_user
 
 router = APIRouter()
@@ -94,7 +99,10 @@ async def list_leads(
             "converted": activity.get("converted", False),
             "intent_score": lead_doc.get("intel", {}).get("intent_score", 0),
             "status": lead_doc.get("status", "Unknown"),
-            "record_id": lead_doc.get("lead_id")
+            "record_id": lead_doc.get("lead_id"),
+            "email_sent": lead_doc.get("crm", {}).get("email_sent", False),
+            "last_sent_at": lead_doc.get("crm", {}).get("last_sent_at", None),
+            "email": lead_doc.get("contact", {}).get("email", ""),
         }
         leads_list.append(flat_lead)
         
@@ -254,7 +262,9 @@ async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=
             }
         },
         "status": lead_doc.get("status", "Ready"),
-        "batch_id": lead_doc.get("batch_id")
+        "batch_id": lead_doc.get("batch_id"),
+        "email_sent": lead_doc.get("crm", {}).get("email_sent", False),
+        "last_sent_at": lead_doc.get("crm", {}).get("last_sent_at", None),
     }
 
 @router.patch("/{record_id}/status")
@@ -284,10 +294,11 @@ async def update_lead_status(record_id: str, payload: dict = Body(...), user=Dep
 
 @router.post("/{record_id}/approve-email")
 async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
-    """Send approved email and log to CRM"""
+    """Send approved email and log to CRM. Returns 409 if already sent."""
     subject = payload.get("subject")
     content = payload.get("content")
-    to_email = payload.get("to_email", "23102076@apsit.edu.in")
+    to_email = payload.get("to_email", "mishraabhishek1703@gmail.com")
+    force = payload.get("force", False)  # allow forced re-send if explicitly requested
     
     if not subject or not content:
         raise HTTPException(status_code=400, detail="Missing subject or content")
@@ -296,16 +307,30 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
     lead_doc = await leads_collection.find_one(query)
     if not lead_doc:
          raise HTTPException(status_code=404, detail="Lead not found")
+
+    # ── Duplicate guard ────────────────────────────────────────────────────────
+    if not force and lead_doc.get("crm", {}).get("email_sent", False):
+        last_sent = lead_doc.get("crm", {}).get("last_sent_at")
+        last_sent_str = last_sent.isoformat() if last_sent else None
+        raise HTTPException(
+            status_code=409,
+            detail={"already_sent": True, "sent_at": last_sent_str}
+        )
          
     # 1. Send Email
     from services.email_sender import EmailService
+
+    # Generate a secure UUID token for this specific email send
+    tracking_token = str(uuid.uuid4())
+
     try:
         print(f"Attempting to send email to {to_email}")
         await EmailService.send_email(
             company_id=user["company_id"],
             to_address=to_email,
             subject=subject,
-            html_content=content
+            html_content=content,
+            tracking_token=tracking_token,
         )
         print("Email sent successfully")
     except Exception as e:
@@ -314,18 +339,26 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
         print(f"Email sending failed with error: {e}")
         raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(e)}")
         
-    # 2. Update CRM state
+    # 2. Inject tracking pixel into the content before saving to CRM logs
+    # This ensures the stored snapshot used for engagement tracking matches the sent email.
+    base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+    from services.email_sender import _inject_tracking
+    final_content = _inject_tracking(content, tracking_token, base_url)
+
+    # 3. Update CRM state
     now = datetime.utcnow()
     
     await leads_collection.update_one(query, {
         "$set": {
             "status": "Email Dispatched",
             "crm.email_sent": True,
+            "crm.last_sent_at": now,
+            "intel.email.sent_html": final_content,   # store TRACKED HTML
             "updated_at": now
         }
     })
     
-    # 3. Log to activity
+    # 4. Log to activity
     await agent_activity_collection.insert_one({
         "company_id": user["company_id"],
         "batch_id": lead_doc.get("batch_id"),
@@ -336,15 +369,30 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
         "timestamp": now
     })
     
-    # 4. Log to email_logs
+    # 5. Log to email_logs
     await email_logs_collection.insert_one({
         "company_id": user["company_id"],
         "batch_id": lead_doc.get("batch_id"),
         "lead_id": record_id,
         "subject": subject,
-        "content_snapshot": content,
+        "content_snapshot": final_content, # store TRACKED HTML
         "sent_at": now,
-        "status": "delivered"
+        "status": "delivered",
+        "tracking_token": tracking_token,
+    })
+
+    # 4b. Seed email_opens summary document (open_count starts at 0)
+    await email_opens_collection.insert_one({
+        "token":          tracking_token,
+        "lead_id":        record_id,
+        "company_id":     user["company_id"],
+        "open_count":     0,
+        "click_count":    0,
+        "first_opened_at":  None,
+        "last_opened_at":   None,
+        "first_clicked_at": None,
+        "last_clicked_at":  None,
+        "created_at":     now,
     })
     
     # 5. AUTO-SCHEDULE FOLLOW-UP using AI timing data
@@ -363,6 +411,12 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
                 scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
         else:
             scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+
+        # ✅ Safety check: if the scheduled date is already in the past,
+        # reschedule to 3 days from now at 10:00 AM UTC
+        if scheduled_at <= datetime.utcnow():
+            scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+            print(f"[Auto-Schedule] AI-recommended date was in the past. Rescheduled to {scheduled_at}")
 
         # Build a quick follow-up reminder email
         lead_name = lead_doc.get("profile", {}).get("name", "there")
@@ -412,6 +466,254 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
     
     return {"status": "success", "message": "Email sent and logged successfully"}
 
+
+@router.post("/bulk-approve")
+async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current_user)):
+    """
+    Send emails to a list of leads sequentially.
+    Skips leads where email has already been sent.
+    Returns per-lead result for live frontend progress display.
+    Body: { "lead_ids": ["id1", "id2", ...] }
+    """
+    lead_ids: List[str] = payload.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="lead_ids list is required")
+
+    from services.email_sender import EmailService
+
+    results = []
+
+    for lead_id in lead_ids:
+        query = {"lead_id": lead_id, "company_id": user["company_id"]}
+        lead_doc = await leads_collection.find_one(query)
+
+        if not lead_doc:
+            results.append({
+                "lead_id": lead_id,
+                "name": "Unknown",
+                "company": "Unknown",
+                "result": "failed",
+                "reason": "Lead not found"
+            })
+            continue
+
+        profile  = lead_doc.get("profile", {})
+        name     = profile.get("name", "Unknown")
+        company  = profile.get("company", "Unknown")
+        to_email = lead_doc.get("contact", {}).get("email", "")
+
+        # Skip if already sent
+        if lead_doc.get("crm", {}).get("email_sent", False):
+            last_sent = lead_doc.get("crm", {}).get("last_sent_at")
+            results.append({
+                "lead_id": lead_id,
+                "name": name,
+                "company": company,
+                "result": "skipped",
+                "reason": "Already sent",
+                "sent_at": last_sent.isoformat() if last_sent else None
+            })
+            continue
+
+        # Build email from stored intel
+        intel      = lead_doc.get("intel", {})
+        email_data = intel.get("email", {})
+        subject    = email_data.get("subject", f"Following up — {company}")
+        raw_content = email_data.get("preview", "")
+        sent_html   = email_data.get("sent_html", "")   # saved by individual approve-email
+
+        # Convert plain-text preview → HTML (fallback when no individual send happened yet)
+        def plain_to_html(text: str) -> str:
+            if not text:
+                return ""
+            if text.strip().startswith("<"):
+                return text
+            paragraphs = text.split("\n\n")
+            html_parts = []
+            for para in paragraphs:
+                para = para.strip()
+                if not para:
+                    continue
+                para = para.replace("\n", "<br>")
+                html_parts.append(f"<p style='margin:0 0 16px 0;line-height:1.6'>{para}</p>")
+            return (
+                "<div style='font-family:Arial,sans-serif;font-size:15px;color:#1a1a1a;max-width:600px'>"
+                + "".join(html_parts)
+                + "</div>"
+            )
+
+        # Prefer the exact HTML approved individually; fall back to converting plain preview
+        content = sent_html if sent_html else plain_to_html(raw_content)
+
+
+        if not content:
+            results.append({
+                "lead_id": lead_id,
+                "name": name,
+                "company": company,
+                "result": "failed",
+                "reason": "No email draft available — run agent first"
+            })
+            continue
+
+        # Generate a secure UUID token for this specific email send
+        tracking_token = str(uuid.uuid4())
+
+        try:
+            # Use lead's contact email; fall back to default test email (same as approve-email endpoint)
+            if not to_email:
+                to_email = "mishraabhishek1703@gmail.com"
+                print(f"  [BulkApprove] No lead email for {name}, using default fallback: {to_email}")
+
+            await EmailService.send_email(
+                company_id=user["company_id"],
+                to_address=to_email,
+                subject=subject,
+                html_content=content,
+                tracking_token=tracking_token,
+            )
+
+            now = datetime.utcnow()
+
+            await leads_collection.update_one(query, {
+                "$set": {
+                    "status": "Email Dispatched",
+                    "crm.email_sent": True,
+                    "crm.last_sent_at": now,
+                    "crm.timeline.first_contact": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "updated_at": now
+                }
+            })
+
+            await agent_activity_collection.insert_one({
+                "company_id": user["company_id"],
+                "batch_id": lead_doc.get("batch_id"),
+                "lead_id": lead_id,
+                "agent": "HUMAN",
+                "action": "Bulk approved and dispatched email via UI",
+                "status": "SUCCESS",
+                "timestamp": now
+            })
+
+            # Inject tracking pixel into the content before saving to CRM logs
+            base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+            from services.email_sender import _inject_tracking
+            final_content = _inject_tracking(content, tracking_token, base_url)
+
+            await email_logs_collection.insert_one({
+                "company_id": user["company_id"],
+                "batch_id": lead_doc.get("batch_id"),
+                "lead_id": lead_id,
+                "subject": subject,
+                "content_snapshot": final_content, # store TRACKED HTML
+                "sent_at": now,
+                "status": "delivered",
+                "tracking_token": tracking_token,
+            })
+
+            # Seed email_opens summary document
+            await email_opens_collection.insert_one({
+                "token":          tracking_token,
+                "lead_id":        lead_id,
+                "company_id":     user["company_id"],
+                "open_count":     0,
+                "click_count":    0,
+                "first_opened_at":  None,
+                "last_opened_at":   None,
+                "first_clicked_at": None,
+                "last_clicked_at":  None,
+                "created_at":     now,
+            })
+
+            # ── Auto-schedule follow-up (same as individual approve-email) ──────
+            try:
+                from datetime import timedelta
+                timing_data = lead_doc.get("intel", {}).get("timing", {})
+                recommended_date = timing_data.get("recommended_date", "")
+                send_time        = timing_data.get("send_time", "10:00")
+
+                if recommended_date:
+                    try:
+                        scheduled_at = datetime.strptime(f"{recommended_date} {send_time}", "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+                else:
+                    scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+
+                # Safety: if AI date is in the past, push to 3 days from now
+                if scheduled_at <= datetime.utcnow():
+                    scheduled_at = datetime.utcnow().replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=3)
+
+                followup_subject = f"Quick follow-up: {subject}"
+                followup_content = f"""<p>Hi {name},</p>
+<p>Just following up on my previous email regarding a potential opportunity for {company}.</p>
+<p>I wanted to make sure it didn't get lost in your inbox. Would love to connect and explore if there's a fit.</p>
+<p>Feel free to reply here or grab a time that works for you.</p>
+<p>Best regards</p>"""
+
+                await followup_queue_collection.insert_one({
+                    "company_id": user["company_id"],
+                    "lead_id": lead_id,
+                    "batch_id": lead_doc.get("batch_id"),
+                    "subject": followup_subject,
+                    "content": followup_content,
+                    "status": "pending",
+                    "scheduled_at": scheduled_at,
+                    "created_at": now,
+                    "auto_scheduled": True
+                })
+
+                await leads_collection.update_one(query, {
+                    "$set": {
+                        "crm.timeline.first_contact": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "crm.timeline.next_followup": scheduled_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    }
+                })
+
+                await agent_activity_collection.insert_one({
+                    "company_id": user["company_id"],
+                    "batch_id": lead_doc.get("batch_id"),
+                    "lead_id": lead_id,
+                    "agent": "SCHEDULER",
+                    "action": f"Auto-scheduled follow-up for {scheduled_at.strftime('%Y-%m-%d %H:%M')} UTC",
+                    "status": "QUEUED",
+                    "timestamp": now
+                })
+                print(f"[BulkApprove] Follow-up queued for lead {lead_id} at {scheduled_at}")
+
+            except Exception as sched_err:
+                print(f"[BulkApprove] Warning: could not auto-schedule follow-up for {lead_id}: {sched_err}")
+                # Non-fatal — email already sent
+
+            results.append({
+                "lead_id": lead_id,
+                "name": name,
+                "company": company,
+                "result": "sent",
+                "sent_at": now.isoformat()
+            })
+
+        except Exception as e:
+            results.append({
+                "lead_id": lead_id,
+                "name": name,
+                "company": company,
+                "result": "failed",
+                "reason": str(e)
+            })
+
+    sent    = [r for r in results if r["result"] == "sent"]
+    skipped = [r for r in results if r["result"] == "skipped"]
+    failed  = [r for r in results if r["result"] == "failed"]
+
+    return {
+        "total":   len(results),
+        "sent":    len(sent),
+        "skipped": len(skipped),
+        "failed":  len(failed),
+        "results": results
+    }
+
 @router.post("/{record_id}/schedule-followup")
 async def schedule_followup(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
     """Schedule a future email follow-up"""
@@ -459,3 +761,76 @@ async def schedule_followup(record_id: str, payload: dict = Body(...), user=Depe
     })
     
     return {"status": "success", "message": "Follow-up scheduled successfully"}
+
+
+@router.get("/{record_id}/email-engagement")
+async def get_email_engagement(record_id: str, user=Depends(get_current_user)):
+    """
+    Fetch email open and click stats for a specific lead.
+    Looks up the latest email_logs doc to get the tracking_token,
+    then reads from email_opens and email_events.
+    """
+    from bson import ObjectId
+    # 1. Check if an email was sent and get the tracking token
+    # company_id might be a string (from UI send) or ObjectId (from batch)
+    company_id_str = user["company_id"]
+    company_id_obj = ObjectId(company_id_str)
+    
+    log_query = {
+        "lead_id": record_id, 
+        "company_id": {"$in": [company_id_str, company_id_obj]}, 
+        "status": "delivered"
+    }
+    latest_log = await email_logs_collection.find_one(log_query, sort=[("sent_at", pymongo.DESCENDING)])
+    
+    if not latest_log:
+        return {
+            "email_sent": False,
+            "open_count": 0,
+            "click_count": 0,
+        }
+        
+    tracking_token = latest_log.get("tracking_token")
+    if not tracking_token:
+        # Legacy email sent before tracking was implemented
+        return {
+            "email_sent": True,
+            "last_sent_at": latest_log.get("sent_at"),
+            "open_count": 0,
+            "click_count": 0,
+            "is_legacy": True
+        }
+        
+    # 2. Get summary stats from email_opens
+    summary = await email_opens_collection.find_one({"token": tracking_token})
+    
+    # 3. Get recent individual events from email_events for the timeline
+    cursor = email_events_collection.find({"token": tracking_token}).sort("timestamp", pymongo.DESCENDING).limit(5)
+    events = await cursor.to_list(length=5)
+    
+    recent_events = []
+    for evt in events:
+        recent_events.append({
+            "type": evt.get("event_type"),
+            "timestamp": evt.get("timestamp"),
+            "user_agent": evt.get("user_agent"),
+            "ip_address": evt.get("ip_address")
+        })
+        
+    def _iso_utc(dt):
+        return dt.isoformat() + "Z" if dt else None
+        
+    result = {
+        "email_sent": True,
+        "last_sent_at": _iso_utc(latest_log.get("sent_at")),
+        "open_count": summary.get("open_count", 0) if summary else 0,
+        "click_count": summary.get("click_count", 0) if summary else 0,
+        "first_opened_at": _iso_utc(summary.get("first_opened_at")) if summary else None,
+        "last_opened_at": _iso_utc(summary.get("last_opened_at")) if summary else None,
+        "first_clicked_at": _iso_utc(summary.get("first_clicked_at")) if summary else None,
+        "last_clicked_at": _iso_utc(summary.get("last_clicked_at")) if summary else None,
+        "recent_events": recent_events
+    }
+    print("ENGAGEMENT RESPONSE:", record_id, result)
+    return result
+

@@ -22,6 +22,8 @@ export default function SettingsPage() {
         company_name: "",
         company_website_url: "",
         country: "",
+        business_type: "",
+        company_description: "",
         contact_person_name: "",
         email: "",
         phone_number: "",
@@ -29,8 +31,6 @@ export default function SettingsPage() {
         confirm_password: "",
         api_key: "",
         settings: {
-            smtp_host: "",
-            smtp_port: "",
             smtp_user: "",
             smtp_pass: ""
         }
@@ -49,15 +49,15 @@ export default function SettingsPage() {
                         company_name: data.company_name || "",
                         company_website_url: data.company_website_url || "",
                         country: data.country || "",
+                        business_type: data.business_type || "",
+                        company_description: data.company_description || "",
                         contact_person_name: data.contact_person_name || "",
                         email: data.email || "",
                         phone_number: data.phone_number || "",
-                        password: "", // never populate password
+                        password: "",
                         confirm_password: "",
                         api_key: data.api_key || "",
                         settings: {
-                            smtp_host: data.settings?.smtp_host || "",
-                            smtp_port: data.settings?.smtp_port || "",
                             smtp_user: data.settings?.smtp_user || "",
                             smtp_pass: data.settings?.smtp_pass || ""
                         }
@@ -79,30 +79,27 @@ export default function SettingsPage() {
 
     const handleSave = async (e) => {
         e.preventDefault();
-
-        // If they are trying to update the password...
         if (formData.password || formData.confirm_password) {
             if (formData.password !== formData.confirm_password) {
                 showToast("ERROR: SECURITY KEYS DO NOT MATCH.", true);
                 return;
             }
         }
-
         setSaving(true);
         try {
             const payload = {
                 company_name: formData.company_name,
                 company_website_url: formData.company_website_url,
                 country: formData.country,
+                business_type: formData.business_type,
+                company_description: formData.company_description,
                 contact_person_name: formData.contact_person_name,
                 email: formData.email,
                 phone_number: formData.phone_number,
                 api_key: formData.api_key,
                 settings: formData.settings
             };
-            if (formData.password) {
-                payload.password = formData.password;
-            }
+            if (formData.password) payload.password = formData.password;
 
             const res = await fetch(`${API}/auth/settings`, {
                 method: "PATCH",
@@ -114,7 +111,7 @@ export default function SettingsPage() {
             });
             if (res.ok) {
                 showToast("CONFIGURATION SAVED SUCCESSFULLY.");
-                setFormData(prev => ({ ...prev, password: "", confirm_password: "" })); // clear password fields
+                setFormData(prev => ({ ...prev, password: "", confirm_password: "" }));
             } else {
                 showToast("SAVE FAILED. CHECK SYSTEM LOGS.", true);
             }
@@ -129,10 +126,7 @@ export default function SettingsPage() {
         const { name, value } = e.target;
         if (name.startsWith("settings.")) {
             const field = name.split(".")[1];
-            setFormData(prev => ({
-                ...prev,
-                settings: { ...prev.settings, [field]: value }
-            }));
+            setFormData(prev => ({ ...prev, settings: { ...prev.settings, [field]: value } }));
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
         }
@@ -185,7 +179,6 @@ export default function SettingsPage() {
                                 </p>
                             </div>
                         </div>
-
                         <form onSubmit={handleUnlock} className="space-y-6">
                             {unlockError && (
                                 <div className="p-3 bg-red-50 border-2 border-red-500 text-red-500 font-mono text-xs font-bold uppercase tracking-widest text-center">
@@ -238,23 +231,43 @@ export default function SettingsPage() {
         </div>
     );
 
+    const smtpProviders = [
+        {
+            name: "Gmail",
+            color: "#EA4335",
+            steps: ["Enable 2-Step Verification", "Go to Google Account → Security", "Search 'App Passwords'", "Select App: Mail → Other", "Copy the 16-char password"],
+            url: "https://myaccount.google.com/apppasswords",
+            label: "Open Google"
+        },
+        {
+            name: "Outlook / Hotmail",
+            color: "#0078D4",
+            steps: ["Sign in to Microsoft account", "Go to Security → Advanced", "Enable two-step verification", "App Passwords → Create new", "Copy the generated password"],
+            url: "https://account.live.com/proofs/AppPassword",
+            label: "Open Microsoft"
+        },
+        {
+            name: "Yahoo Mail",
+            color: "#6001D2",
+            steps: ["Sign in to Yahoo Security", "Enable two-step verification", "Click 'Generate app password'", "Name it and click Generate", "Copy the 16-char password"],
+            url: "https://login.yahoo.com/account/security/app-passwords/list",
+            label: "Open Yahoo"
+        }
+    ];
+
     return (
         <DashboardLayout>
             <div className="flex flex-col h-full relative bg-grid-pattern overflow-x-hidden p-8" style={{ backgroundColor: "#F9F9F9" }}>
-                {/* TOAST SYSTEM */}
+                {/* TOAST */}
                 {toastMessage && (
                     <div className={`fixed top-4 right-4 z-50 px-6 py-4 border-2 ${toastMessage.isError ? 'border-red-500 bg-red-50' : 'border-ink bg-primary text-white'} shadow-[8px_8px_0px_0px_rgba(10,10,10,1)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in`}>
-                        <span className="material-symbols-outlined text-xl">
-                            {toastMessage.isError ? 'error' : 'task_alt'}
-                        </span>
-                        <span className="font-mono text-xs font-bold uppercase tracking-widest">
-                            {toastMessage.text}
-                        </span>
+                        <span className="material-symbols-outlined text-xl">{toastMessage.isError ? 'error' : 'task_alt'}</span>
+                        <span className="font-mono text-xs font-bold uppercase tracking-widest">{toastMessage.text}</span>
                     </div>
                 )}
 
                 <div className="max-w-5xl mx-auto w-full bg-paper border-2 border-ink shadow-[12px_12px_0px_0px_rgba(10,10,10,1)]">
-                    {/* HEADER BLOCK */}
+                    {/* HEADER */}
                     <header className="px-8 py-8 border-b-2 border-ink bg-paper z-10">
                         <div className="flex flex-col gap-2">
                             <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration // v2.4.0</span>
@@ -278,9 +291,10 @@ export default function SettingsPage() {
                                 ))}
                             </div>
 
-                            {/* CONTENT AREA */}
+                            {/* CONTENT */}
                             <form onSubmit={handleSave} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 
+                                {/* ── PROFILE ── */}
                                 {activeTab === "PROFILE" && (
                                     <div className="space-y-10">
                                         <div className="flex items-center gap-6 pb-8 border-b-2 border-ink/10">
@@ -292,15 +306,49 @@ export default function SettingsPage() {
                                                 <p className="font-mono text-xs text-ink/60 uppercase mt-1 tracking-widest">Primary Operational Entity</p>
                                             </div>
                                         </div>
-
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                             <InputField label="Company Name" name="company_name" value={formData.company_name} placeholder="Acme Corp" />
                                             <InputField label="Company Website URL" name="company_website_url" value={formData.company_website_url} placeholder="https://acme.com" />
                                             <InputField label="Region / Country" name="country" value={formData.country} placeholder="United States" />
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">Business Type</label>
+                                                <div className="relative">
+                                                    <select
+                                                        name="business_type"
+                                                        value={formData.business_type}
+                                                        onChange={handleInputChange}
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors appearance-none cursor-pointer"
+                                                    >
+                                                        <option value="">— Select Type —</option>
+                                                        <option value="SaaS">SaaS</option>
+                                                        <option value="E-Commerce">E-Commerce</option>
+                                                        <option value="Agency">Agency</option>
+                                                        <option value="Finance">Finance</option>
+                                                        <option value="Healthcare">Healthcare</option>
+                                                        <option value="Manufacturing">Manufacturing</option>
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                                        <span className="material-symbols-outlined text-ink/60 text-base">expand_more</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">Company Description</label>
+                                            <textarea
+                                                name="company_description"
+                                                value={formData.company_description}
+                                                onChange={handleInputChange}
+                                                placeholder="Briefly describe what your company does..."
+                                                rows={3}
+                                                className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors resize-none"
+                                            />
                                         </div>
                                     </div>
                                 )}
 
+                                {/* ── CONTACTS ── */}
                                 {activeTab === "CONTACTS" && (
                                     <div className="space-y-10">
                                         <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-primary pl-4 text-ink">Primary Operator Details</h2>
@@ -312,6 +360,7 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
+                                {/* ── SECURITY ── */}
                                 {activeTab === "SECURITY" && (
                                     <div className="space-y-10">
                                         <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-red-500 pl-4 text-ink">Access Credentials</h2>
@@ -327,104 +376,100 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
+                                {/* ── INTEGRATIONS ── */}
                                 {activeTab === "INTEGRATIONS" && (
                                     <div className="space-y-12">
-                                        {/* Backend */}
-                                        <div>
-                                            <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-data-green pl-4 text-ink">System Endpoints</h2>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                <InputField label="Backend URL" name="backend_url" value={API} isReadOnly={true} />
-                                                <InputField type="password" label="Gemini API Key" name="api_key" value={formData.api_key} placeholder="sk-..." />
-                                            </div>
-                                        </div>
-
-                                        {/* SMTP */}
+                                        {/* SMTP Gateway */}
                                         <div className="pt-8 border-t-2 border-ink/10">
-                                            <h2 className="font-mono font-bold text-xl uppercase tracking-widest mb-6 border-l-4 border-primary pl-4 text-ink">SMTP Gateway</h2>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Server Host</label>
-                                                    <input
-                                                        type="text"
-                                                        name="settings.smtp_host"
-                                                        value={formData.settings.smtp_host}
-                                                        onChange={handleInputChange}
-                                                        placeholder="smtp.gmail.com"
-                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Port</label>
-                                                    <input
-                                                        type="number"
-                                                        name="settings.smtp_port"
-                                                        value={formData.settings.smtp_port}
-                                                        onChange={handleInputChange}
-                                                        placeholder="587"
-                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Username</label>
-                                                    <input
-                                                        type="text"
-                                                        name="settings.smtp_user"
-                                                        value={formData.settings.smtp_user}
-                                                        onChange={handleInputChange}
-                                                        placeholder="user@example.com"
-                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMTP Password</label>
-                                                    <input
-                                                        type="password"
-                                                        name="settings.smtp_pass"
-                                                        value={formData.settings.smtp_pass}
-                                                        onChange={handleInputChange}
-                                                        placeholder="App Password"
-                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Data Sources (Read-Only Status display) */}
-                                        <div className="pt-8 border-t-2 border-ink/10">
-                                            <div className="flex justify-between items-end mb-6">
-                                                <h2 className="font-mono font-bold text-xl uppercase tracking-widest border-l-4 border-ink pl-4 text-ink">Active Data Bridges</h2>
-                                                <span className="text-[10px] font-mono font-bold uppercase tracking-widest bg-ink text-paper px-3 py-1">AUTO-SYNC ON</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 gap-4">
-                                                {[
-                                                    { id: "companies_collection", desc: "Multi-tenant tenant profiles" },
-                                                    { id: "leads_collection", desc: "Primary B2B contact database" },
-                                                    { id: "agent_activity_collection", desc: "LangGraph agent execution logs" }
-                                                ].map((ds) => (
-                                                    <div key={ds.id} className="flex justify-between items-center p-4 border-2 border-ink bg-paper hover:bg-mute transition-colors group cursor-default">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-8 h-8 bg-data-green/20 border-2 border-data-green flex items-center justify-center shrink-0">
-                                                                <span className="material-symbols-outlined text-sm text-data-green">database</span>
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-mono text-sm font-bold text-ink">{ds.id}</p>
-                                                                <p className="font-mono text-[10px] text-ink/60 uppercase tracking-widest mt-0.5">{ds.desc}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="w-2 h-2 rounded-full bg-data-green animate-pulse"></span>
-                                                            <span className="font-mono text-xs font-bold text-data-green uppercase tracking-widest">LIVE</span>
-                                                        </div>
+                                            {/* Section header */}
+                                            <div className="flex items-center justify-between mb-8">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-ink flex items-center justify-center">
+                                                        <span className="material-symbols-outlined text-paper text-sm">send</span>
                                                     </div>
-                                                ))}
+                                                    <div>
+                                                        <h2 className="font-mono font-bold text-xl uppercase tracking-widest text-ink">SMTP Gateway</h2>
+                                                        <p className="font-mono text-[10px] text-ink/50 uppercase tracking-widest mt-0.5">Outbound email delivery configuration</p>
+                                                    </div>
+                                                </div>
+                                                <span className="flex items-center gap-2 px-3 py-1.5 border-2 border-data-green/40 bg-data-green/10 font-mono text-[10px] font-bold uppercase tracking-widest text-data-green">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-data-green animate-pulse"></span>
+                                                    Auto-Detected
+                                                </span>
+                                            </div>
+
+                                            {/* Input fields — only email + app password */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-ink/70 tracking-widest">
+                                                        <span className="material-symbols-outlined text-sm text-ink/40">person</span>
+                                                        SMTP Username (Your Email)
+                                                    </label>
+                                                    <input type="text" name="settings.smtp_user" value={formData.settings.smtp_user} onChange={handleInputChange} placeholder="user@gmail.com"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                                    <p className="font-mono text-[10px] text-ink/40 uppercase tracking-wide">SMTP host &amp; port are auto-detected from your email domain</p>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <label className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-ink/70 tracking-widest">
+                                                        <span className="material-symbols-outlined text-sm text-ink/40">lock</span>
+                                                        SMTP App Password
+                                                    </label>
+                                                    <input type="password" name="settings.smtp_pass" value={formData.settings.smtp_pass} onChange={handleInputChange} placeholder="Paste App Password here"
+                                                        className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                                </div>
+                                            </div>
+
+                                            {/* App Password Guide — dark card */}
+                                            <div className="border-2 border-ink overflow-hidden shadow-[6px_6px_0px_0px_rgba(10,10,10,1)]">
+                                                {/* Header bar */}
+                                                <div className="bg-ink px-6 py-4 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="material-symbols-outlined text-primary text-lg">key</span>
+                                                        <span className="font-mono text-sm font-bold uppercase tracking-widest text-paper">How to Get Your App Password</span>
+                                                    </div>
+                                                    <span className="px-3 py-1 bg-primary/20 border border-primary/40 font-mono text-[10px] font-bold uppercase tracking-widest text-primary">Required Step</span>
+                                                </div>
+
+                                                {/* Body */}
+                                                <div className="p-6 bg-[#111] text-paper">
+                                                    <p className="font-mono text-xs text-paper/60 uppercase tracking-wide leading-relaxed mb-6">
+                                                        Your email provider requires a dedicated <span className="text-primary font-bold">App Password</span> — not your regular login password — to allow secure third-party email sending.
+                                                    </p>
+
+                                                    {/* Provider cards */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                                        {smtpProviders.map((provider) => (
+                                                            <div key={provider.name} className="border border-paper/10 bg-paper/5 hover:bg-paper/10 transition-all group">
+                                                                <div className="flex items-center gap-3 px-4 py-3 border-b border-paper/10" style={{ borderLeftWidth: '3px', borderLeftColor: provider.color }}>
+                                                                    <span className="font-mono text-xs font-bold uppercase tracking-widest text-paper">{provider.name}</span>
+                                                                </div>
+                                                                <div className="px-4 py-4 space-y-2.5">
+                                                                    {provider.steps.map((step, i) => (
+                                                                        <div key={i} className="flex items-start gap-3">
+                                                                            <span className="shrink-0 w-5 h-5 bg-primary/20 border border-primary/40 flex items-center justify-center font-mono text-[9px] font-bold text-primary">{i + 1}</span>
+                                                                            <span className="font-mono text-[10px] text-paper/60 uppercase tracking-wide leading-tight">{step}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="px-4 pb-4">
+                                                                    <a href={provider.url} target="_blank" rel="noopener noreferrer"
+                                                                        className="flex items-center justify-between w-full px-3 py-2 border border-paper/20 bg-paper/5 hover:bg-primary hover:border-primary hover:text-ink transition-all font-mono text-[10px] font-bold uppercase tracking-widest text-paper/60">
+                                                                        <span>{provider.label}</span>
+                                                                        <span className="material-symbols-outlined text-sm">arrow_outward</span>
+                                                                    </a>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* GLOBAL ACTION BAR */}
+                                {/* GLOBAL SAVE BAR */}
                                 <div className="mt-12 pt-8 border-t-2 border-ink flex justify-end">
                                     <button
                                         type="submit"

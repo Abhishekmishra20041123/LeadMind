@@ -9,6 +9,8 @@ class SignupRequest(BaseModel):
     email: EmailStr
     phone_number: str
     password: str
+    business_type: Optional[str] = None
+    company_description: Optional[str] = None
 
 class SigninRequest(BaseModel):
     email: EmailStr

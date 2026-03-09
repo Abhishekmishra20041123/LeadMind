@@ -383,7 +383,9 @@ async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user
     operator_info = {
         "operator_name": company_data.get("contact_person_name", "[Your Name]"),
         "operator_company": company_data.get("company_name", "Our Company"),
-        "operator_website": company_data.get("company_website_url", "")
+        "operator_website": company_data.get("company_website_url", ""),
+        "operator_business_type": company_data.get("business_type", ""),
+        "operator_company_description": company_data.get("company_description", "")
     }
         
     try:

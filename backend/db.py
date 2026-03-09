@@ -18,6 +18,8 @@ pipeline_collection = database.get_collection("pipeline")
 email_logs_collection = database.get_collection("email_logs")
 agent_activity_collection = database.get_collection("agent_activity")
 followup_queue_collection = database.get_collection("followup_queue")
+email_opens_collection = database.get_collection("email_opens")     # summary: open_count, first/last timestamps
+email_events_collection = database.get_collection("email_events")   # individual open/click events (IP, UA, etc.)
 
 async def create_indexes():
     import pymongo
@@ -62,5 +64,15 @@ async def create_indexes():
     await followup_queue_collection.create_index([("status", pymongo.ASCENDING), ("scheduled_at", pymongo.ASCENDING)])
     await followup_queue_collection.create_index("company_id")
     await followup_queue_collection.create_index("lead_id")
+    
+    # email_opens (summary layer — one doc per sent email)
+    await email_opens_collection.create_index("token", unique=True)
+    await email_opens_collection.create_index([("lead_id", pymongo.ASCENDING), ("company_id", pymongo.ASCENDING)])
+    
+    # email_events (per-event layer — one doc per open/click event)
+    await email_events_collection.create_index("token")
+    await email_events_collection.create_index([("lead_id", pymongo.ASCENDING), ("company_id", pymongo.ASCENDING)])
+    await email_events_collection.create_index("event_type")
+    await email_events_collection.create_index("timestamp")
     
     print("MongoDB indexes created.")

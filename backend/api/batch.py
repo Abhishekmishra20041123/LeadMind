@@ -1,5 +1,13 @@
 import os
 import io
+import sys
+
+# Force UTF-8 output so Unicode characters in agent logs (e.g. →) don't crash on Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import time
 import json
 import pandas as pd
@@ -209,7 +217,9 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                 },
                                 "crm": {
                                     "email_sent": False,
-                                    "timeline": state.get("timeline", {})
+                                    "timeline": state.get("timeline", {}),
+                                    "deal_value": state.get("deal_value", 0.0),
+                                    "stage": state.get("crm_stage", "prospect"),
                                 },
                                 "status": "Ready",
                                 "updated_at": datetime.utcnow()
@@ -232,8 +242,10 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                     await push_batch_log(batch_id, f"SUCCESS: Completed 5-node AI analysis for {company_name}")
 
                 except Exception as e:
-                    print(f"Error processing lead {lead_id}: {e}")
-                    await push_batch_log(batch_id, f"ERROR: Failed processing {company_name} - {str(e)}")
+                    # Sanitize the error message — strip any unencodable Unicode chars
+                    safe_err = str(e).encode('utf-8', errors='replace').decode('utf-8')
+                    print(f"Error processing lead {lead_id}: {safe_err}")
+                    await push_batch_log(batch_id, f"ERROR: Failed processing {company_name} - {safe_err}")
                     await leads_collection.update_one(
                         {"lead_id": lead_id, "batch_id": batch_id},
                         {"$set": {"status": "Error", "intel.error": str(e), "company_id": company_id}},

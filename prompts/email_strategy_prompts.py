@@ -15,6 +15,7 @@ The Operator Info contains these fields — use ALL of them in composing the ema
 - operator_website: The sender's company website URL (include in signature or pitch)
 - operator_business_type: The industry/type of business the operator runs (e.g. SaaS, Agency, E-Commerce)
 - operator_company_description: A short description of what the operator's company actually does
+- operator_logo_url: The URL to the company's uploaded logo image (if available)
 
 TASK:
 Craft a highly personalized HTML outbound follow-up email that MATCHES the EXACT layout and design aesthetic of a high-end B2B SaaS newsletter.
@@ -23,7 +24,7 @@ Craft a highly personalized HTML outbound follow-up email that MATCHES the EXACT
    - A light gray background wrapper (`<div style="background-color: #f7f7f9; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">`)
    - A central white container card (`<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eaeaea;">`)
 3. Inside the white container:
-   - TOP: A clean header/logo representing `operator_company` (can use text, e.g., `<h1 style="font-size: 24px; font-weight: bold; margin-bottom: 30px; color: #111;">Logo Placeholder</h1>`).
+   - TOP: A clean header/logo representing `operator_company`. If `operator_logo_url` is provided and not empty, use an image tag like `<img src="operator_logo_url" alt="operator_company logo" style="max-height: 48px; margin-bottom: 30px; display: block;" />`. If `operator_logo_url` is empty, use text instead: `<h1 style="font-size: 24px; font-weight: bold; margin-bottom: 30px; color: #111;">[operator_company]</h1>`.
    - HEADLINE: A large, bold headline `<h2 style="font-size: 28px; line-height: 1.2; color: #111; margin-bottom: 20px; letter-spacing: -0.5px;">` directly related to their pain point.
    - BODY: Normal text paragraphs `<p style="font-size: 16px; line-height: 1.6; color: #444; margin-bottom: 20px;">`.
    - HOOK: Open by mentioning you noticed their company's presence or activity on the operator's website ("We noticed [Company]'s presence on our site...").

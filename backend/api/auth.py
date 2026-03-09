@@ -78,7 +78,8 @@ async def signin(request: SigninRequest):
     return {"access_token": access_token, "token_type": "bearer"}
 
 from dependencies import get_current_user
-from fastapi import Depends, Body
+from fastapi import Depends, Body, UploadFile, File
+import shutil
 from bson import ObjectId
 
 @router.get("/me")
@@ -99,6 +100,7 @@ async def get_my_profile(user=Depends(get_current_user)):
         "api_key": company.get("api_key", ""),
         "business_type": company.get("business_type", ""),
         "company_description": company.get("company_description", ""),
+        "logo_url": company.get("logo_url", ""),
         "settings": company.get("settings", {})
     }
 
@@ -111,7 +113,7 @@ async def update_settings(payload: dict = Body(...), user=Depends(get_current_us
     top_level_fields = [
         "company_name", "company_website_url", "country",
         "contact_person_name", "email", "phone_number", "api_key",
-        "business_type", "company_description"
+        "business_type", "company_description", "logo_url"
     ]
     
     for field in top_level_fields:
@@ -136,3 +138,29 @@ async def update_settings(payload: dict = Body(...), user=Depends(get_current_us
     )
     
     return {"status": "success", "message": "Settings updated"}
+
+@router.post("/upload-logo")
+async def upload_logo(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user)
+):
+    """Upload a company logo and return its public URL."""
+    try:
+        # Generate a unique filename based on company ID to prevent collisions
+        # We can just keep overwriting the same company's logo file
+        os.makedirs("public/logos", exist_ok=True)
+        filename = f"{user['company_id']}_{file.filename}"
+        file_path = os.path.join("public", "logos", filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+        public_url = f"{base_url}/public/logos/{filename}"
+        
+        # We don't automatically update the collection here, we let the frontend 
+        # save it via PATCH /settings, but we could do it here as well.
+        
+        return {"status": "success", "logo_url": public_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")

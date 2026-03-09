@@ -11,6 +11,8 @@ from api.tracking import router as tracking_router
 from db import create_indexes
 from services.scheduler import scheduler_loop
 import asyncio
+import os
+from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +26,12 @@ async def lifespan(app: FastAPI):
     scheduler_task.cancel()
 
 app = FastAPI(title="Strategic Grid API", lifespan=lifespan)
+
+# Ensure public logos directory exists before mounting StaticFiles
+os.makedirs("public/logos", exist_ok=True)
+
+# Mount public directory for serving static files like uploaded logos
+app.mount("/public", StaticFiles(directory="public"), name="public")
 
 app.add_middleware(
     CORSMiddleware,

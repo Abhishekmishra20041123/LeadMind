@@ -44,7 +44,7 @@ def generate_email(state, llm=None, prompt_templates=None):
     
     lead_json = json.dumps(state.get("lead", {}), indent=2)
     intent_signals = json.dumps(state.get("key_signals", []), indent=2)
-    company_info = json.dumps(state.get("company_info", {"product": "Sales Multi-Agent AI", "value_prop": "Automated pipeline orchestration"}), indent=2)
+    company_info = json.dumps(state.get("company_info", {}), indent=2)
     operator_info = json.dumps(state.get("operator_info", {}), indent=2)
     
     

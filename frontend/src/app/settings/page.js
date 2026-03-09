@@ -24,6 +24,7 @@ export default function SettingsPage() {
         country: "",
         business_type: "",
         company_description: "",
+        logo_url: "",
         contact_person_name: "",
         email: "",
         phone_number: "",
@@ -51,6 +52,7 @@ export default function SettingsPage() {
                         country: data.country || "",
                         business_type: data.business_type || "",
                         company_description: data.company_description || "",
+                        logo_url: data.logo_url || "",
                         contact_person_name: data.contact_person_name || "",
                         email: data.email || "",
                         phone_number: data.phone_number || "",
@@ -93,6 +95,7 @@ export default function SettingsPage() {
                 country: formData.country,
                 business_type: formData.business_type,
                 company_description: formData.company_description,
+                logo_url: formData.logo_url,
                 contact_person_name: formData.contact_person_name,
                 email: formData.email,
                 phone_number: formData.phone_number,
@@ -129,6 +132,38 @@ export default function SettingsPage() {
             setFormData(prev => ({ ...prev, settings: { ...prev.settings, [field]: value } }));
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+
+    const handleLogoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingLogo(true);
+        const data = new FormData();
+        data.append("file", file);
+
+        try {
+            const res = await fetch(`${API}/auth/upload-logo`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+                },
+                body: data
+            });
+            if (res.ok) {
+                const result = await res.json();
+                setFormData(prev => ({ ...prev, logo_url: result.logo_url }));
+                showToast("LOGO UPLOADED SUCCESSFULLY.");
+            } else {
+                showToast("LOGO UPLOAD FAILED.", true);
+            }
+        } catch (error) {
+            showToast(`ERROR: ${error.message}`, true);
+        } finally {
+            setUploadingLogo(false);
         }
     };
 
@@ -298,8 +333,18 @@ export default function SettingsPage() {
                                 {activeTab === "PROFILE" && (
                                     <div className="space-y-10">
                                         <div className="flex items-center gap-6 pb-8 border-b-2 border-ink/10">
-                                            <div className="w-24 h-24 bg-ink flex items-center justify-center text-paper font-display text-4xl font-bold border-2 border-ink">
-                                                {getInitials(formData.company_name)}
+                                            <div className="relative group">
+                                                <div className="w-24 h-24 bg-ink flex items-center justify-center text-paper font-display text-4xl font-bold border-2 border-ink overflow-hidden">
+                                                    {formData.logo_url ? (
+                                                        <img src={formData.logo_url} alt="Company Logo" className="w-full h-full object-contain bg-white" />
+                                                    ) : (
+                                                        getInitials(formData.company_name)
+                                                    )}
+                                                </div>
+                                                <label className="absolute inset-0 bg-ink/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer text-paper text-xs font-mono font-bold">
+                                                    <span>{uploadingLogo ? 'UPLOADING...' : 'CHANGE'}</span>
+                                                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                                                </label>
                                             </div>
                                             <div>
                                                 <h2 className="font-display font-bold text-2xl text-ink uppercase">{formData.company_name || 'UNDEFINED PROTOCOL'}</h2>

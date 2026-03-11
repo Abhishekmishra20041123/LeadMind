@@ -174,8 +174,7 @@ export default function IntelPage({ params }) {
 
                 // Initialize raw editor content
                 if (!rawEditorContent) {
-                    let html = `<div class="mb-4 pb-2 border-b border-ink/20 font-bold">Subject: ${fullData.subject}</div>`;
-                    html += fullData.draft.map((line) => {
+                    let html = fullData.draft.map((line) => {
                         if (line.type === 'br') return '<br/>';
                         if (line.type === 'html') return `<div class="mb-4 text-ink/50 select-none">${line.content}</div>`;
                         return `<p>${line.content}</p>`;
@@ -574,12 +573,17 @@ export default function IntelPage({ params }) {
                                                 />
                                             </div>
                                         ) : (
-                                            <div id="email-editor"
-                                                className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto"
-                                                contentEditable
-                                                suppressContentEditableWarning
-                                                dangerouslySetInnerHTML={{ __html: rawEditorContent }}
-                                            />
+                                            <div className="flex flex-col flex-1 bg-white">
+                                                <div className="px-6 py-4 text-sm font-bold text-ink border-b border-ink/10 bg-mute/10">
+                                                    Subject: {target.subject}
+                                                </div>
+                                                <div id="email-editor"
+                                                    className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto"
+                                                    contentEditable
+                                                    suppressContentEditableWarning
+                                                    dangerouslySetInnerHTML={{ __html: rawEditorContent }}
+                                                />
+                                            </div>
                                         )}
 
                                         {/* Template Disclaimer */}

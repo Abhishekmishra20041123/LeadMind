@@ -297,6 +297,7 @@ async def preview_template(lead_id: str, payload: dict = Body(...), user=Depends
     
     # Format AI content to preserve paragraph breaks
     formatted_ai_content = raw_content.replace("\n", "<br/>")
+    formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
     
     # Temporarily replace {{personalized_message}} placeholder in the lead dict
     lead_with_ai = dict(lead_doc)
@@ -401,6 +402,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             
             # Format AI content to preserve paragraph breaks, matching the style wrapper
             formatted_ai_content = content.replace("\n", "<br/>")
+            formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
 
             # Temporarily replace {{personalized_message}} placeholder in the lead dict
             lead_with_ai = dict(lead_doc)
@@ -681,6 +683,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
             try:
                 # Format AI content to preserve paragraph breaks
                 formatted_ai_content = base_content.replace("\n", "<br/>")
+                formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
 
                 # Temporarily replace {{personalized_message}} placeholder in the lead dict
                 lead_with_ai = dict(lead_doc)

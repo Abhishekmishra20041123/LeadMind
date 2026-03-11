@@ -51,7 +51,7 @@ const makeBlock = (type) => {
         desc: { text: "Describe your product or service here.", fontSize: 15, color: "#333333", bgColor: "#f9f9f9", align: "left", lineHeight: 1.7 },
         cta: { label: "Book a Call", url: "https://", bgColor: "#0a0a0a", textColor: "#ffffff", borderRadius: 4, align: "center", fontSize: 15 },
         divider: { color: "#e0e0e0", thickness: 1, style: "solid", marginY: 16 },
-        footer: { text: "{{operator_company}} · contact@yourcompany.com\n123 Business Ave, New York, NY 10001", unsubscribeUrl: "https://yourcompany.com/unsubscribe", fontSize: 12, color: "#888888", bgColor: "#f4f4f4", align: "center" },
+        footer: { text: "© 2026 BRIGHT ZENITH PRIVATE LIMITED", websiteUrl: "https://brightzenith.com", unsubscribeUrl: "https://yourcompany.com/unsubscribe", socials: { x: "https://x.com", discord: "https://discord.com", youtube: "https://youtube.com", linkedin: "", facebook: "", instagram: "" }, fontSize: 12, color: "#888888", bgColor: "#ffffff", align: "center" },
         ai_body: { fontSize: 15, color: "#333333", bgColor: "#ffffff", align: "left", lineHeight: 1.7 },
     };
     return { ...base, ...(defaults[type] || {}) };
@@ -63,8 +63,8 @@ const BLOCK_PALETTE = [
     { type: "heading", icon: "title", label: "Heading" },
     { type: "text", icon: "subject", label: "Text Block" },
     { type: "ai_body", icon: "auto_awesome", label: "AI Email Body" },
-    { type: "greeting", icon: "waving_hand", label: "Greeting" },
-    { type: "desc", icon: "description", label: "Product Desc" },
+    // { type: "greeting", icon: "waving_hand", label: "Greeting" },
+    // { type: "desc", icon: "description", label: "Product Desc" },
     { type: "cta", icon: "smart_button", label: "CTA Button" },
     { type: "divider", icon: "horizontal_rule", label: "Divider" },
     { type: "footer", icon: "article", label: "Footer" },
@@ -113,11 +113,31 @@ function renderBlockHTML(block, gs, isPreview = false) {
         }
         case "divider":
             return `<tr><td style="padding:${block.marginY}px 24px;"><hr style="border:none;border-top:${block.thickness}px ${block.style} ${block.color};margin:0;" /></td></tr>`;
-        case "footer":
+        case "footer": {
+            const company = block.companyText ?? block.text ?? "© 2026 BRIGHT ZENITH PRIVATE LIMITED";
+            const socials = block.socials || {};
+            const icons = [];
+            const iconSize = 24;
+            const iconColor = block.color ? block.color.replace('#', '') : "888888";
+            
+            if (socials.x) icons.push(`<a href="${socials.x}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/twitterx--v2.png" alt="X" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+            if (socials.discord) icons.push(`<a href="${socials.discord}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/discord-logo.png" alt="Discord" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+            if (socials.youtube) icons.push(`<a href="${socials.youtube}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/youtube-play.png" alt="YouTube" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+            if (socials.linkedin) icons.push(`<a href="${socials.linkedin}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/linkedin.png" alt="LinkedIn" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+            if (socials.facebook) icons.push(`<a href="${socials.facebook}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/facebook-new.png" alt="Facebook" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+            if (socials.instagram) icons.push(`<a href="${socials.instagram}" style="display:inline-block;margin:0 12px;"><img src="https://img.icons8.com/ios-filled/50/${iconColor}/instagram-new.png" alt="Instagram" width="${iconSize}" height="${iconSize}" style="border:0;display:block;" /></a>`);
+
+            const iconsHtml = icons.length > 0 ? `<div style="margin-bottom:16px;text-align:center;">${icons.join("")}</div>` : "";
+            const linksHtml = [];
+            if (block.websiteUrl) linksHtml.push(`<a href="${block.websiteUrl}" style="color:${block.color};text-decoration:none;">Visit website</a>`);
+            if (block.unsubscribeUrl) linksHtml.push(`<a href="${block.unsubscribeUrl}" style="color:${block.color};text-decoration:none;">Unsubscribe</a>`);
+            const bottomLinks = linksHtml.length > 0 ? `<div style="margin-top:16px;opacity:0.8;">${linksHtml.join(' &nbsp;|&nbsp; ')}</div>` : "";
+
             return wrap(
-                `<div style="padding:20px 0;text-align:${block.align};font-size:${block.fontSize}px;color:${block.color};font-family:${gs.fontFamily};line-height:1.6;">${fill(block.text).replace(/\n/g, "<br/>")}<br/><a href="${block.unsubscribeUrl}" style="color:${block.color};text-decoration:underline;font-size:${block.fontSize - 1}px;">Unsubscribe</a></div>`,
+                `<div style="padding:24px 0;text-align:${block.align};font-size:${block.fontSize}px;color:${block.color};font-family:${gs.fontFamily};line-height:1.6;">${iconsHtml}<div>${fill(company).replace(/\n/g, "<br/>")}</div>${bottomLinks}</div>`,
                 block.bgColor
             );
+        }
         default: return "";
     }
 }
@@ -379,16 +399,38 @@ function BlockProperties({ block, onUpdate, onInsertPlaceholder }) {
         case "footer": return (
             <div>
                 <div className="mb-3">
-                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Footer Text</div>
-                    <textarea value={block.text} onChange={e => u("text", e.target.value)} rows={4} className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper resize-none" />
+                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Company / Copyright Text</div>
+                    <textarea value={block.companyText !== undefined ? block.companyText : (block.text || "")} onChange={e => u("companyText", e.target.value)} rows={2} className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper resize-none" />
                 </div>
-                {placeholderBar("text")}
+                {placeholderBar("companyText")}
+                
+                <div className="mb-3">
+                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Website URL (leave blank to hide)</div>
+                    <input type="text" value={block.websiteUrl || ""} onChange={e => u("websiteUrl", e.target.value)} placeholder="https://" className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
+                </div>
+                
                 <div className="mb-3">
                     <div className="font-mono text-xs text-ink/60 uppercase mb-1">Unsubscribe URL</div>
-                    <input type="text" value={block.unsubscribeUrl} onChange={e => u("unsubscribeUrl", e.target.value)} placeholder="https://" className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
+                    <input type="text" value={block.unsubscribeUrl || ""} onChange={e => u("unsubscribeUrl", e.target.value)} placeholder="https://" className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
                 </div>
+
+                <div className="mb-4 p-3 bg-mute border border-ink/20">
+                    <div className="font-mono text-xs text-ink/80 uppercase font-bold mb-3">Social Links</div>
+                    <div className="text-[10px] text-ink/50 mb-3 leading-tight">Leave blank to hide. Using URLs will automatically show the platform's icon.</div>
+                    {["x", "discord", "youtube", "linkedin", "facebook", "instagram"].map(plat => (
+                        <div key={plat} className="flex items-center gap-2 mb-2">
+                            <span className="font-mono text-[10px] w-16 uppercase">{plat}</span>
+                            <input type="text" value={(block.socials && block.socials[plat]) || ""} onChange={e => {
+                                const newSocials = { ...(block.socials || {}) };
+                                newSocials[plat] = e.target.value;
+                                u("socials", newSocials);
+                            }} placeholder="https://" className="flex-1 font-mono text-xs border border-ink px-2 py-1 bg-paper" />
+                        </div>
+                    ))}
+                </div>
+
                 <SliderProp label="Font Size" value={block.fontSize} min={10} max={18} unit="px" onChange={v => u("fontSize", v)} />
-                <ColorPicker label="Text Color" value={block.color} onChange={v => u("color", v)} />
+                <ColorPicker label="Text & Icon Color" value={block.color} onChange={v => u("color", v)} />
                 <ColorPicker label="Background" value={block.bgColor} onChange={v => u("bgColor", v)} />
                 {alignBtns()}
             </div>
@@ -473,13 +515,34 @@ function CanvasBlock({ block, gs }) {
                     <hr style={{ border: "none", borderTop: `${block.thickness}px ${block.style} ${block.color}`, margin: 0 }} />
                 </div>
             );
-        case "footer":
+        case "footer": {
+            const company = block.companyText ?? block.text ?? "© 2026 BRIGHT ZENITH PRIVATE LIMITED";
+            const socials = block.socials || {};
+            const icons = [];
+            const iconSize = 24;
+            const iconColor = block.color ? block.color.replace('#', '') : "888888";
+            
+            if (socials.x) icons.push(<img key="x" src={`https://img.icons8.com/ios-filled/50/${iconColor}/twitterx--v2.png`} alt="X" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+            if (socials.discord) icons.push(<img key="discord" src={`https://img.icons8.com/ios-filled/50/${iconColor}/discord-logo.png`} alt="Discord" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+            if (socials.youtube) icons.push(<img key="youtube" src={`https://img.icons8.com/ios-filled/50/${iconColor}/youtube-play.png`} alt="YouTube" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+            if (socials.linkedin) icons.push(<img key="linkedin" src={`https://img.icons8.com/ios-filled/50/${iconColor}/linkedin.png`} alt="LinkedIn" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+            if (socials.facebook) icons.push(<img key="facebook" src={`https://img.icons8.com/ios-filled/50/${iconColor}/facebook-new.png`} alt="Facebook" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+            if (socials.instagram) icons.push(<img key="instagram" src={`https://img.icons8.com/ios-filled/50/${iconColor}/instagram-new.png`} alt="Instagram" style={{ width: iconSize, height: iconSize, margin: "0 12px" }} />);
+
+            const linksHtml = [];
+            if (block.websiteUrl) linksHtml.push(<span key="web">Visit website</span>);
+            if (block.unsubscribeUrl) linksHtml.push(<span key="unsub">Unsubscribe</span>);
+
             return (
-                <div style={{ background: block.bgColor, padding: "16px 24px", textAlign: block.align, fontSize: block.fontSize, color: block.color, fontFamily: gs.fontFamily, lineHeight: 1.6 }}>
-                    <div style={{ whiteSpace: "pre-line" }}>{block.text}</div>
-                    <a href={block.unsubscribeUrl} style={{ color: block.color, fontSize: block.fontSize - 1, display: "block", marginTop: 8 }}>Unsubscribe</a>
+                <div style={{ background: block.bgColor, padding: "24px 24px", textAlign: block.align, fontSize: block.fontSize, color: block.color, fontFamily: gs.fontFamily, lineHeight: 1.6 }}>
+                    {icons.length > 0 && <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>{icons}</div>}
+                    <div style={{ whiteSpace: "pre-line" }}>{company}</div>
+                    {linksHtml.length > 0 && <div style={{ marginTop: 16, opacity: 0.8 }}>
+                        {linksHtml.map((item, i) => <span key={i}>{i > 0 ? "  |  " : ""}{item}</span>)}
+                    </div>}
                 </div>
             );
+        }
         default: return null;
     }
 }

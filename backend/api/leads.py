@@ -267,6 +267,53 @@ async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=
         "last_sent_at": lead_doc.get("crm", {}).get("last_sent_at", None),
     }
 
+@router.post("/{lead_id}/preview-template")
+async def preview_template(lead_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
+    """
+    Preview the email with the given template applied.
+    """
+    template_id = payload.get("template_id")
+    raw_content = payload.get("content", "")
+    
+    if not template_id:
+        return {"html": raw_content}
+        
+    from db import email_templates_collection, companies_collection, leads_collection
+    from bson import ObjectId
+    
+    lead_doc = await leads_collection.find_one({"lead_id": lead_id, "company_id": user["company_id"]})
+    if not lead_doc:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    try:
+        tpl_doc = await email_templates_collection.find_one({"_id": ObjectId(template_id), "company_id": user["company_id"]})
+    except:
+        tpl_doc = None
+        
+    if not tpl_doc:
+        raise HTTPException(status_code=404, detail="Template not found")
+        
+    company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+    
+    # Format AI content to preserve paragraph breaks
+    formatted_ai_content = raw_content.replace("\n", "<br/>")
+    
+    # Temporarily replace {{personalized_message}} placeholder in the lead dict
+    lead_with_ai = dict(lead_doc)
+    if lead_with_ai.get("intel") is None:
+        lead_with_ai["intel"] = {}
+    if lead_with_ai["intel"].get("email") is None:
+        lead_with_ai["intel"]["email"] = {}
+    lead_with_ai["intel"]["email"]["preview"] = formatted_ai_content
+    
+    from api.templates import render_blocks_to_html
+    
+    tpl_html = render_blocks_to_html(tpl_doc.get("blocks", []), tpl_doc.get("global_styles", {}))
+    final_html = render_template(tpl_html, lead_with_ai, company_doc)
+    
+    return {"html": final_html}
+
+
 @router.patch("/{record_id}/status")
 async def update_lead_status(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
     new_status = payload.get("status")
@@ -291,6 +338,23 @@ async def update_lead_status(record_id: str, payload: dict = Body(...), user=Dep
          raise HTTPException(status_code=404, detail="Lead not found")
          
     return {"status": "success"}
+
+
+def render_template(html: str, lead: dict, company: dict) -> str:
+    """Replace {{placeholder}} tokens in a template HTML with actual lead/company data."""
+    replacements = {
+        "{{customer_name}}": lead.get("profile", {}).get("name", ""),
+        "{{customer_company}}": lead.get("profile", {}).get("company", ""),
+        "{{customer_title}}": lead.get("profile", {}).get("title", ""),
+        "{{personalized_message}}": lead.get("intel", {}).get("email", {}).get("preview", ""),
+        "{{operator_name}}": company.get("contact_person_name", company.get("company_name", "")),
+        "{{operator_company}}": company.get("company_name", ""),
+        "{{operator_email}}": company.get("email", ""),
+    }
+    for token, value in replacements.items():
+        html = html.replace(token, str(value) if value else "")
+    return html
+
 
 @router.post("/{record_id}/approve-email")
 async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(get_current_user)):
@@ -317,6 +381,43 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             detail={"already_sent": True, "sent_at": last_sent_str}
         )
          
+    # ── Optional: wrap AI content in a saved email template ───────────────────
+    template_id = payload.get("template_id")
+    final_html_content = content  # default: raw AI/edited content
+
+    if template_id:
+        from db import email_templates_collection, companies_collection
+        from bson import ObjectId
+        try:
+            tpl_doc = await email_templates_collection.find_one({
+                "_id": ObjectId(template_id),
+                "company_id": user["company_id"]
+            })
+        except Exception:
+            tpl_doc = None
+
+        if tpl_doc:
+            company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+            
+            # Format AI content to preserve paragraph breaks, matching the style wrapper
+            formatted_ai_content = content.replace("\n", "<br/>")
+
+            # Temporarily replace {{personalized_message}} placeholder in the lead dict
+            lead_with_ai = dict(lead_doc)
+            if lead_with_ai.get("intel") is None:
+                lead_with_ai["intel"] = {}
+            if lead_with_ai["intel"].get("email") is None:
+                lead_with_ai["intel"]["email"] = {}
+            lead_with_ai["intel"]["email"]["preview"] = formatted_ai_content
+
+            from api.templates import render_blocks_to_html
+            tpl_html = render_blocks_to_html(
+                tpl_doc.get("blocks", []),
+                tpl_doc.get("global_styles", {})
+            )
+            # render_template will replace {{personalized_message}} with formatted_ai_content
+            final_html_content = render_template(tpl_html, lead_with_ai, company_doc)
+
     # 1. Send Email
     from services.email_sender import EmailService
 
@@ -329,7 +430,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             company_id=user["company_id"],
             to_address=to_email,
             subject=subject,
-            html_content=content,
+            html_content=final_html_content,
             tracking_token=tracking_token,
         )
         print("Email sent successfully")
@@ -473,11 +574,29 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
     Send emails to a list of leads sequentially.
     Skips leads where email has already been sent.
     Returns per-lead result for live frontend progress display.
-    Body: { "lead_ids": ["id1", "id2", ...] }
+    Body: { "lead_ids": ["id1", "id2", ...], "template_id": "optional_id" }
     """
     lead_ids: List[str] = payload.get("lead_ids", [])
     if not lead_ids:
         raise HTTPException(status_code=400, detail="lead_ids list is required")
+
+    template_id = payload.get("template_id")
+    
+    # Pre-fetch template and company doc if template_id is provided
+    tpl_doc = None
+    company_doc = {}
+    if template_id:
+        from db import email_templates_collection, companies_collection
+        from bson import ObjectId
+        try:
+            tpl_doc = await email_templates_collection.find_one({
+                "_id": ObjectId(template_id),
+                "company_id": user["company_id"]
+            })
+            if tpl_doc:
+                company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+        except Exception as e:
+            print(f"[BulkApprove] Failed to load template {template_id}: {e}")
 
     from services.email_sender import EmailService
 
@@ -543,10 +662,9 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
             )
 
         # Prefer the exact HTML approved individually; fall back to converting plain preview
-        content = sent_html if sent_html else plain_to_html(raw_content)
+        base_content = sent_html if sent_html else plain_to_html(raw_content)
 
-
-        if not content:
+        if not base_content:
             results.append({
                 "lead_id": lead_id,
                 "name": name,
@@ -555,6 +673,32 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 "reason": "No email draft available — run agent first"
             })
             continue
+            
+        final_html_content = base_content
+        
+        # Apply template if requested and exists
+        if tpl_doc and not sent_html:  # Only apply template if it hasn't already been compiled into sent_html
+            try:
+                # Format AI content to preserve paragraph breaks
+                formatted_ai_content = base_content.replace("\n", "<br/>")
+
+                # Temporarily replace {{personalized_message}} placeholder in the lead dict
+                lead_with_ai = dict(lead_doc)
+                if lead_with_ai.get("intel") is None:
+                    lead_with_ai["intel"] = {}
+                if lead_with_ai["intel"].get("email") is None:
+                    lead_with_ai["intel"]["email"] = {}
+                lead_with_ai["intel"]["email"]["preview"] = formatted_ai_content
+
+                from api.templates import render_blocks_to_html
+                tpl_html = render_blocks_to_html(
+                    tpl_doc.get("blocks", []),
+                    tpl_doc.get("global_styles", {})
+                )
+                final_html_content = render_template(tpl_html, lead_with_ai, company_doc)
+            except Exception as e:
+                print(f"[BulkApprove] Failed to apply template for {lead_id}: {e}")
+                final_html_content = base_content # fallback
 
         # Generate a secure UUID token for this specific email send
         tracking_token = str(uuid.uuid4())
@@ -569,7 +713,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 company_id=user["company_id"],
                 to_address=to_email,
                 subject=subject,
-                html_content=content,
+                html_content=final_html_content,
                 tracking_token=tracking_token,
             )
 
@@ -598,7 +742,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
             # Inject tracking pixel into the content before saving to CRM logs
             base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
             from services.email_sender import _inject_tracking
-            final_content = _inject_tracking(content, tracking_token, base_url)
+            final_content = _inject_tracking(final_html_content, tracking_token, base_url)
 
             await email_logs_collection.insert_one({
                 "company_id": user["company_id"],

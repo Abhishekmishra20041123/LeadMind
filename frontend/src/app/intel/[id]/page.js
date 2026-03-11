@@ -18,6 +18,13 @@ export default function IntelPage({ params }) {
     const [isSending, setIsSending] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [engagement, setEngagement] = useState(null);
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplate, setSelectedTemplate] = useState("");
+
+    // Live Preview State
+    const [rawEditorContent, setRawEditorContent] = useState("");
+    const [previewHtml, setPreviewHtml] = useState(null);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
     const handleRegenerate = async () => {
         if (!target) return;
@@ -43,6 +50,38 @@ export default function IntelPage({ params }) {
         }
     };
 
+    const fetchPreview = async (templateId, contentToPreview) => {
+        if (!templateId) {
+            setPreviewHtml(null);
+            return;
+        }
+        setIsLoadingPreview(true);
+        try {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`${API}/leads/${id}/preview-template`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ template_id: templateId, content: contentToPreview })
+            });
+            const data = await res.json();
+            setPreviewHtml(data.html);
+        } catch (e) {
+            console.error("Preview fetch failed:", e);
+        } finally {
+            setIsLoadingPreview(false);
+        }
+    };
+
+    const handleTemplateChange = (e) => {
+        const newTemplateId = e.target.value;
+        const currentContent = document.getElementById("email-editor")?.innerHTML || rawEditorContent;
+        if (currentContent !== rawEditorContent) {
+            setRawEditorContent(currentContent);
+        }
+        setSelectedTemplate(newTemplateId);
+        fetchPreview(newTemplateId, currentContent);
+    };
+
     const handleApproveEmail = async () => {
         if (!target) return;
         if (target.emailSent) {
@@ -51,7 +90,7 @@ export default function IntelPage({ params }) {
         }
         setIsSending(true);
         try {
-            const contentBody = document.getElementById("email-editor")?.innerHTML || target.draft.map(d => d.content).join("");
+            const contentBody = document.getElementById("email-editor")?.innerHTML || rawEditorContent || target.draft.map(d => d.content).join("");
             const res = await fetch(`${API}/leads/${id}/approve-email`, {
                 method: "POST",
                 headers: {
@@ -61,7 +100,8 @@ export default function IntelPage({ params }) {
                 body: JSON.stringify({
                     subject: target.subject,
                     content: contentBody,
-                    to_email: target.email || "mishraabhishek1703@gmail.com"
+                    to_email: target.email || "mishraabhishek1703@gmail.com",
+                    template_id: selectedTemplate || null
                 })
             });
             if (res.status === 409) {
@@ -131,6 +171,17 @@ export default function IntelPage({ params }) {
                 };
                 setTarget(fullData);
                 setLoading(false);
+
+                // Initialize raw editor content
+                if (!rawEditorContent) {
+                    let html = `<div class="mb-4 pb-2 border-b border-ink/20 font-bold">Subject: ${fullData.subject}</div>`;
+                    html += fullData.draft.map((line) => {
+                        if (line.type === 'br') return '<br/>';
+                        if (line.type === 'html') return `<div class="mb-4 text-ink/50 select-none">${line.content}</div>`;
+                        return `<p>${line.content}</p>`;
+                    }).join("");
+                    setRawEditorContent(html);
+                }
             })
             .catch(err => {
                 console.error("Failed to fetch lead data:", err);
@@ -143,6 +194,20 @@ export default function IntelPage({ params }) {
             .then(data => setEngagement(data))
             .catch(err => console.error("Failed to fetch engagement:", err));
 
+        // Fetch available templates
+        fetch(`${API}/templates/`, { headers })
+            .then(res => res.json())
+            .then(data => {
+                const fetchedTemplates = data.templates || [];
+                setTemplates(fetchedTemplates);
+                if (fetchedTemplates.length > 0 && !selectedTemplate) {
+                    const defaultTemplate = fetchedTemplates[0]._id;
+                    setSelectedTemplate(defaultTemplate);
+                    // fetchPreview will be triggered by a separate useEffect so it gets the initialized rawEditorContent
+                }
+            })
+            .catch(err => console.error("Failed to fetch templates:", err));
+
         // Auto-refresh engagement stats every 5 seconds for a "live" feel
         const interval = setInterval(() => {
             fetch(`${API}/leads/${id}/email-engagement`, { headers })
@@ -153,6 +218,13 @@ export default function IntelPage({ params }) {
 
         return () => clearInterval(interval);
     }, [id, batchId]);
+
+    // Setup initial preview once templates and content are fetched
+    useEffect(() => {
+        if (selectedTemplate && rawEditorContent && !previewHtml && !isLoadingPreview) {
+            fetchPreview(selectedTemplate, rawEditorContent);
+        }
+    }, [selectedTemplate, rawEditorContent]);
 
     if (loading || !target) {
         return (
@@ -484,16 +556,37 @@ export default function IntelPage({ params }) {
                                                 Clear Buffer
                                             </button>
                                         </div>
-                                        {/* Content Editable Area */}
-                                        <div id="email-editor" className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto" contentEditable suppressContentEditableWarning>
-                                            <div className="mb-4 pb-2 border-b border-ink/20 font-bold">
-                                                Subject: {target.subject}
+                                        {/* Content Editable Area OR Preview */}
+                                        {isLoadingPreview ? (
+                                            <div className="flex-1 p-6 flex flex-col items-center justify-center font-mono text-sm text-ink/60 bg-mute/20">
+                                                <span className="material-symbols-outlined text-4xl animate-spin mb-4">refresh</span>
+                                                GENERATING PREVIEW...
                                             </div>
-                                            {target.draft.map((line, i) => {
-                                                if (line.type === 'br') return <br key={i} />;
-                                                if (line.type === 'html') return <div key={i} className="mb-4 text-ink/50 select-none" dangerouslySetInnerHTML={{ __html: line.content }} />;
-                                                return <p key={i} dangerouslySetInnerHTML={{ __html: line.content }}></p>;
-                                            })}
+                                        ) : previewHtml ? (
+                                            <div className="flex-1 bg-white relative">
+                                                <div className="absolute top-0 right-0 bg-primary text-white px-3 py-1 font-mono text-[10px] z-10 uppercase tracking-widest font-bold">
+                                                    Template Preview (Read-Only)
+                                                </div>
+                                                <iframe
+                                                    srcDoc={previewHtml}
+                                                    className="w-full h-full border-none"
+                                                    title="Email Preview"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div id="email-editor"
+                                                className="flex-1 p-6 font-mono text-sm leading-relaxed text-ink/80 focus:outline-none overflow-y-auto"
+                                                contentEditable
+                                                suppressContentEditableWarning
+                                                dangerouslySetInnerHTML={{ __html: rawEditorContent }}
+                                            />
+                                        )}
+
+                                        {/* Template Disclaimer */}
+                                        <div className="px-4 py-2 border-t border-ink/10 bg-mute/30 font-mono text-[10px] text-ink/50 text-center animate-pulse">
+                                            {previewHtml
+                                                ? "PREVIEW MODE: Read-only preview. Switch to 'Raw AI Source' to edit text."
+                                                : "EDIT MODE: The text above is the raw AI body. It will be wrapped inside the selected HTML template upon dispatch."}
                                         </div>
                                         {/* Actions Footer */}
                                         <div className="p-4 border-t border-ink bg-paper flex justify-between items-center gap-4">
@@ -526,7 +619,7 @@ export default function IntelPage({ params }) {
                                                                     const res = await fetch(`${API}/leads/${id}/approve-email`, {
                                                                         method: "POST",
                                                                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
-                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true })
+                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true, template_id: selectedTemplate || null })
                                                                     });
                                                                     if (!res.ok) throw new Error("Failed");
                                                                     alert("Email re-sent successfully.");
@@ -543,6 +636,20 @@ export default function IntelPage({ params }) {
                                                         </button>
                                                     </div>
                                                 )}
+                                                <div className="flex items-center gap-2 px-3 py-1 border border-ink bg-paper focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
+                                                    <span className="material-symbols-outlined text-ink/50 text-[18px]">view_quilt</span>
+                                                    <select
+                                                        value={selectedTemplate}
+                                                        onChange={handleTemplateChange}
+                                                        className="font-mono text-xs bg-transparent outline-none py-1.5 cursor-pointer text-ink appearance-none pr-4"
+                                                        style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231a1a1a%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right center', backgroundSize: '8px auto' }}
+                                                    >
+                                                        <option value="">Raw AI Source</option>
+                                                        {templates.map(t => (
+                                                            <option key={t._id} value={t._id}>{t.name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                                 <button className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm">
                                                     <span className="material-symbols-outlined text-lg">content_copy</span>
                                                     COPY

@@ -20,6 +20,7 @@ agent_activity_collection = database.get_collection("agent_activity")
 followup_queue_collection = database.get_collection("followup_queue")
 email_opens_collection = database.get_collection("email_opens")     # summary: open_count, first/last timestamps
 email_events_collection = database.get_collection("email_events")   # individual open/click events (IP, UA, etc.)
+email_templates_collection = database.get_collection("email_templates")  # saved email layout templates
 
 async def create_indexes():
     import pymongo

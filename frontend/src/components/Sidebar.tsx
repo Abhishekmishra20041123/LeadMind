@@ -8,6 +8,7 @@ export default function Sidebar() {
         { name: "Mission Control", path: "/", icon: "dashboard" },
         { name: "The Ledger", path: "/ledger", icon: "table_chart" },
         { name: "Upload Protocol", path: "/upload", icon: "cloud_upload" },
+        { name: "Email Designer", path: "/email-designer", icon: "draw" },
         { name: "Agent Monitor", path: "/agents", icon: "memory", badge: "RUNNING" },
         { name: "Settings", path: "/settings", icon: "settings" },
     ];

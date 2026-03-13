@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { StatusBadge } from "./StatusBadge";
 
-export function LedgerRow({ lead, analyzing, runAgent }) {
+export function LedgerRow({ lead, analyzing, runAgent, deleteLead }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -60,7 +60,20 @@ export function LedgerRow({ lead, analyzing, runAgent }) {
                             <span className="material-symbols-outlined text-[16px]">bolt</span>
                         </button>
                     )}
-                    <Link href={`/intel/${leadId}`} className="p-2 hover:text-primary transition-colors inline-block">
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (window.confirm(`Are you sure you want to delete lead ${lead.name || leadId}?`)) {
+                                deleteLead(leadId);
+                            }
+                        }}
+                        className="w-8 h-8 flex items-center justify-center border border-ink bg-paper hover:bg-red-50 text-ink/40 hover:text-red-600 transition-colors group-hover:text-paper"
+                        title="Delete Lead"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                    <Link href={`/intel/${leadId}`} className="p-2 hover:text-primary transition-colors inline-block text-ink/40 group-hover:text-paper">
                         <span className="material-symbols-outlined">{isAnalyzing || activeStatus === "Processing" ? "pending" : "arrow_forward"}</span>
                     </Link>
                 </div>

@@ -59,7 +59,7 @@ export default function UploadProtocolPage() {
                 {/* Main Content Area */}
                 <main className="flex-1 relative w-full h-full flex items-center justify-center p-4 md:p-8 overflow-y-auto">
                     {/* Modal Overlay Container */}
-                    <div className="relative w-full max-w-[800px] bg-paper border-[3px] border-ink shadow-[8px_8px_0px_0px_rgba(10,10,10,1)] flex flex-col">
+                    <div className="relative z-30 w-full max-w-[800px] max-h-[90vh] bg-paper border-[3px] border-ink shadow-[8px_8px_0px_0px_rgba(10,10,10,1)] flex flex-col">
 
                         {/* Modal Header */}
                         <div className="flex items-center justify-between border-b border-ink p-6 bg-ink text-paper shrink-0">
@@ -73,7 +73,7 @@ export default function UploadProtocolPage() {
                         </div>
 
                         {/* Modal Body: Scrollable */}
-                        <div className="overflow-y-auto p-8 flex flex-col gap-8 flex-1">
+                        <div className="overflow-y-auto p-6 flex flex-col gap-6 flex-1">
                             {/* File Inputs List */}
                             <div className="flex flex-col gap-4">
                                 <div className="mb-2">

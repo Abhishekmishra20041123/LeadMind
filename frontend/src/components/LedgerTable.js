@@ -1,6 +1,6 @@
 import { LedgerRow } from "./LedgerRow";
 
-export function LedgerTable({ leads, analyzing, runAgent, loading }) {
+export function LedgerTable({ leads, analyzing, runAgent, deleteLead, loading }) {
     if (loading) {
         return (
             <div className="flex-1 overflow-auto bg-paper">
@@ -52,6 +52,7 @@ export function LedgerTable({ leads, analyzing, runAgent, loading }) {
                             lead={{ ...lead, _index: i }}
                             analyzing={analyzing}
                             runAgent={runAgent}
+                            deleteLead={deleteLead}
                         />
                     ))}
                 </tbody>

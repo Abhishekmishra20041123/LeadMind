@@ -193,12 +193,34 @@ function SliderProp({ label, value, min, max, unit = "", onChange }) {
 
 function ImageInput({ label, src, mode, onSrcChange, onModeChange }) {
     const fileRef = useRef();
-    const handleFile = (e) => {
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleFile = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => onSrcChange(ev.target.result);
-        reader.readAsDataURL(file);
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const token = localStorage.getItem("access_token");
+            const res = await fetch(`${API}/templates/upload`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                },
+                body: formData
+            });
+            if (!res.ok) throw new Error("Upload failed");
+            const data = await res.json();
+            onSrcChange(data.url);
+        } catch (err) {
+            console.error(err);
+            alert("Image upload failed. Please try again or use a URL.");
+        } finally {
+            setIsUploading(false);
+        }
     };
     return (
         <div className="mb-4">
@@ -213,12 +235,15 @@ function ImageInput({ label, src, mode, onSrcChange, onModeChange }) {
                     className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
             ) : (
                 <div>
-                    <button onClick={() => fileRef.current?.click()}
-                        className="w-full font-mono text-xs border border-dashed border-ink py-2 hover:bg-mute text-ink/60">
-                        Click to upload image
+                    <button 
+                        onClick={() => fileRef.current?.click()}
+                        disabled={isUploading}
+                        className={`w-full font-mono text-xs border border-dashed border-ink py-2 text-ink/60 ${isUploading ? "opacity-50 cursor-not-allowed" : "hover:bg-mute"}`}>
+                        {isUploading ? "Uploading to Cloudinary..." : "Click to upload image"}
                     </button>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-                    {src && src.startsWith("data:") && <p className="font-mono text-[10px] text-data-green mt-1">✓ Image loaded</p>}
+                    {src && src.startsWith("http") && <p className="font-mono text-[10px] text-data-green mt-1">✓ Image uploaded to Cloudinary</p>}
+                    {src && src.startsWith("data:") && <p className="font-mono text-[10px] text-red-500 mt-1">⚠ Legacy base64 image (re-upload to fix clipping)</p>}
                 </div>
             )}
         </div>
@@ -688,14 +713,14 @@ export default function EmailDesigner() {
         <DashboardLayout>
             {/* ── Toast ── */}
             {toast && (
-                <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 border border-ink font-mono text-sm shadow-lg transition-all ${toast.type === "error" ? "bg-red-50 text-red-700" : "bg-paper text-ink"}`}>
+                <div className={`fixed bottom-6 right-6 z-[70] px-5 py-3 border border-ink font-mono text-sm shadow-lg transition-all ${toast.type === "error" ? "bg-red-50 text-red-700" : "bg-paper text-ink"}`}>
                     {toast.msg}
                 </div>
             )}
 
             {/* ── Save Modal ── */}
             {showSaveModal && (
-                <div className="fixed inset-0 bg-ink/40 z-40 flex items-center justify-center" onClick={() => setShowSaveModal(false)}>
+                <div className="fixed inset-0 bg-ink/40 z-[60] flex items-center justify-center" onClick={() => setShowSaveModal(false)}>
                     <div className="bg-paper border border-ink p-8 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-2xl font-bold uppercase mb-6">Save Template</h3>
                         <div className="font-mono text-xs text-ink/60 uppercase mb-2">Template Name</div>
@@ -715,7 +740,7 @@ export default function EmailDesigner() {
 
             {/* ── Preview Modal ── */}
             {showPreview && (
-                <div className="fixed inset-0 bg-ink/60 z-40 flex flex-col" onClick={() => setShowPreview(false)}>
+                <div className="fixed inset-0 bg-ink/60 z-[60] flex flex-col" onClick={() => setShowPreview(false)}>
                     <div className="bg-paper border-b border-ink px-6 py-3 flex items-center gap-4 shrink-0" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display text-xl font-bold uppercase mr-4">Email Preview</h3>
                         <button onClick={() => setPreviewMode("desktop")} className={`font-mono text-xs px-4 py-2 border border-ink flex items-center gap-2 ${previewMode === "desktop" ? "bg-ink text-paper" : "hover:bg-mute"}`}>

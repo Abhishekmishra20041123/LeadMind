@@ -212,8 +212,27 @@ function LedgerView() {
             });
             if (!res.ok) throw new Error("Agent failed");
             await load(page, batchId, searchQuery, minScore, maxScore);
-        } catch (e) { console.error(e); }
-        finally { setAnalyzing(null); }
+        } catch (e) { 
+            console.error(e); 
+        } finally {
+            setAnalyzing(null);
+        }
+    };
+
+    const handleDeleteLead = async (leadId) => {
+        try {
+            const res = await fetch(`${API}/leads/${leadId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` }
+            });
+            if (!res.ok) throw new Error("Delete failed");
+            // Optimistic update
+            setLeads(prev => prev.filter(l => (l.lead_id || l.id) !== leadId));
+            setTotal(prev => prev - 1);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to delete lead");
+        }
     };
 
     // ── Bulk send — runs in the click handler, NOT in useEffect ───────────────
@@ -421,7 +440,13 @@ function LedgerView() {
             </div>
 
             <main className="flex-1 overflow-x-auto relative">
-                <LedgerTable leads={leads} loading={loading} analyzing={analyzing} runAgent={handleRunAgent} />
+                <LedgerTable 
+                    leads={leads} 
+                    loading={loading} 
+                    analyzing={analyzing} 
+                    runAgent={handleRunAgent} 
+                    deleteLead={handleDeleteLead}
+                />
             </main>
         </div>
     );

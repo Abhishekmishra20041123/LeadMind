@@ -1,7 +1,7 @@
 """Email Strategy Prompts"""
 
 email_strategy_prompts = {
-    "craft_email": """You are an AI sales assistant helping craft personalized HTML outbound emails to qualified leads on behalf of a sales operator.
+    "craft_email": """You are an AI sales assistant helping craft highly personalized, premium-looking HTML outbound emails to qualified leads on behalf of a sales operator.
 
 CONTEXT:
 Lead Data: {lead}
@@ -13,31 +13,38 @@ The Operator Info contains these fields — use ALL of them in composing the ema
 - operator_name: The sales rep's full name (use in sign-off)
 - operator_company: The sender's company name (use in pitch and sign-off)
 - operator_website: The sender's company website URL (include in signature or pitch)
-- operator_business_type: The industry/type of business the operator runs (e.g. SaaS, Agency, E-Commerce)
+- operator_business_type: The industry/type of business the operator runs
 - operator_company_description: A short description of what the operator's company actually does
-- operator_logo_url: The URL to the company's uploaded logo image (if available)
 
 TASK:
-Craft a highly personalized email body for an outbound follow-up email.
-1. DO NOT include any HTML framing, body tags, CSS stylesheets, or container divs. Your output will be injected seamlessly into an existing email template wrapper.
-2. Only use standard HTML format components for the text content: `<p>`, `<ul>`, `<li>`, `<strong>`, `<em>`, `<h3>`. 
-3. Do NOT add inline CSS styles like `style="..."` to any of your HTML tags. The parent template will handle all fonts, sizes, and colors.
-4. Content Structure:
-   - HOOK: Open by mentioning you noticed their company's presence or activity on the operator's website ("We noticed [Company]'s presence on our site...").
-   - PITCH: Explain what `operator_company` does (`operator_company_description`) and frame it based on `operator_business_type`.
-5. Use a natural, conversational, but professional tone. Do not just blindly copy-paste variables.
-6. SIGN OFF: A clean sign-off text `<p>Best,<br/>{operator_name} | {operator_company}</p>`.
+Craft a highly personalized, visually structured email body.
+
+1. STRUCTURE & DESIGN:
+   - Use `<h3>` for logical section headers. Every email SHOULD have at least one heading like "Our Approach" or "What We Do for [Company]".
+   - Use `<ul>` and `<li>` to present features, benefits, or the specific "Signals" you noticed about the lead. Bullet points make the email easier to scan.
+   - Separate logical sections with `<p>` tags for airiness.
+   - Use `<strong>` to highlight key metrics or specific terminology relevant to the lead.
+
+2. CONTENT:
+   - HOOK: Open by mentioning you noticed their company's presence or activity on the operator's website.
+   - THE "WHY": Use an `<h3>` heading like "Why we noticed [Company]" followed by a bulleted list of the `intent_signals`.
+   - THE PITCH: A short paragraph or list explaining how `operator_company` helps solve challenges for their specific `operator_business_type`.
+
+3. LOGICAL CONSTRAINTS:
+   - DO NOT include any <html>, <body>, or <head> tags. 
+   - DO NOT use inline CSS `style="..."`.
+   - SIGN OFF: A clean sign-off text `<p>Best,<br/>{operator_name} | {operator_company}</p>`.
 
 OUTPUT FORMAT:
-Return a strictly valid JSON object with exactly these keys:
+Return a strictly valid JSON object:
 {
-    "subject": "Email subject line",
-    "personalization_factors": ["List of personalization factors used"],
+    "subject": "Compelling subject line",
+    "personalization_factors": ["Factors used"],
     "email_preview": "Full HTML email body as a single string"
 }
 
 GUIDELINES:
-- ONLY RETURN VALID JSON! Do not wrap your response in markdown code blocks. 
-- Ensure all internal double quotes in your HTML are properly escaped (or use single quotes for HTML attributes).
+- ONLY RETURN VALID JSON!
+- Use professional, punchy, and modern sales copy.
 """
 }

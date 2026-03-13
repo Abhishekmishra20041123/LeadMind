@@ -90,7 +90,21 @@ export default function IntelPage({ params }) {
         }
         setIsSending(true);
         try {
-            const contentBody = document.getElementById("email-editor")?.innerHTML || rawEditorContent || target.draft.map(d => d.content).join("");
+            let contentBody = "";
+            let finalTemplateId = selectedTemplate || null;
+
+            if (previewHtml) {
+                const iframeDoc = document.getElementById("email-preview-iframe")?.contentDocument;
+                if (iframeDoc && iframeDoc.body.innerHTML.trim() !== "") {
+                    contentBody = iframeDoc.documentElement.outerHTML;
+                    finalTemplateId = null; // HTML is already wrapped
+                } else {
+                    contentBody = rawEditorContent || target.draft.map(d => d.content).join("");
+                }
+            } else {
+                contentBody = document.getElementById("email-editor")?.innerHTML || rawEditorContent || target.draft.map(d => d.content).join("");
+            }
+
             const res = await fetch(`${API}/leads/${id}/approve-email`, {
                 method: "POST",
                 headers: {
@@ -101,7 +115,7 @@ export default function IntelPage({ params }) {
                     subject: target.subject,
                     content: contentBody,
                     to_email: target.email || "mishraabhishek1703@gmail.com",
-                    template_id: selectedTemplate || null
+                    template_id: finalTemplateId
                 })
             });
             if (res.status === 409) {
@@ -119,6 +133,22 @@ export default function IntelPage({ params }) {
             alert("Delivery failed: " + e.message);
         } finally {
             setIsSending(false);
+        }
+    };
+
+    const handleDeleteLead = async () => {
+        if (!confirm(`Are you sure you want to delete lead ${target?.name}? This action cannot be undone.`)) return;
+        try {
+            const res = await fetch(`${API}/leads/${id}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` }
+            });
+            if (!res.ok) throw new Error("Delete failed");
+            alert("Lead deleted successfully.");
+            window.location.href = "/ledger";
+        } catch (e) {
+            console.error(e);
+            alert("Failed to delete lead: " + e.message);
         }
     };
 
@@ -353,13 +383,17 @@ export default function IntelPage({ params }) {
                                     <div className="flex flex-col gap-1 md:pl-6 pr-4">
                                         <span className="text-xs text-ink/50 uppercase">First Activity</span>
                                         <span className="text-sm font-bold text-ink">
-                                            {engagement.first_opened_at ? new Date(engagement.first_opened_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—"}
+                                            {engagement.first_opened_at || engagement.first_clicked_at 
+                                                ? new Date(engagement.first_opened_at || engagement.first_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                                                : "—"}
                                         </span>
                                     </div>
                                     <div className="flex flex-col gap-1 md:pl-6">
                                         <span className="text-xs text-ink/50 uppercase">Last Activity</span>
                                         <span className="text-sm font-bold text-ink">
-                                            {engagement.last_opened_at ? new Date(engagement.last_opened_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—"}
+                                            {engagement.last_opened_at || engagement.last_clicked_at 
+                                                ? new Date(engagement.last_opened_at || engagement.last_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                                                : "—"}
                                         </span>
                                     </div>
                                 </div>
@@ -562,14 +596,26 @@ export default function IntelPage({ params }) {
                                                 GENERATING PREVIEW...
                                             </div>
                                         ) : previewHtml ? (
-                                            <div className="flex-1 bg-white relative">
+                                            <div className="flex-1 bg-white relative flex flex-col">
                                                 <div className="absolute top-0 right-0 bg-primary text-white px-3 py-1 font-mono text-[10px] z-10 uppercase tracking-widest font-bold">
-                                                    Template Preview (Read-Only)
+                                                    Template Preview (Editable)
                                                 </div>
                                                 <iframe
+                                                    id="email-preview-iframe"
                                                     srcDoc={previewHtml}
-                                                    className="w-full h-full border-none"
+                                                    className="w-full h-full border-none flex-1"
                                                     title="Email Preview"
+                                                    onLoad={(e) => {
+                                                        if (e.target.contentDocument) {
+                                                            const editable = e.target.contentDocument.getElementById('ai-email-body-editable');
+                                                            if (editable) {
+                                                                editable.setAttribute('contenteditable', 'true');
+                                                            }
+                                                            const style = e.target.contentDocument.createElement('style');
+                                                            style.innerHTML = 'body { outline: none; } [contenteditable="true"] { outline: none; cursor: text; min-height: 50px; } [contenteditable="true"]:hover { outline: 1px dashed #ccc; } [contenteditable="true"]:focus { outline: 1px dashed #667eea; background: rgba(102, 126, 234, 0.05); }';
+                                                            e.target.contentDocument.head.appendChild(style);
+                                                        }
+                                                    }}
                                                 />
                                             </div>
                                         ) : (
@@ -589,11 +635,11 @@ export default function IntelPage({ params }) {
                                         {/* Template Disclaimer */}
                                         <div className="px-4 py-2 border-t border-ink/10 bg-mute/30 font-mono text-[10px] text-ink/50 text-center animate-pulse">
                                             {previewHtml
-                                                ? "PREVIEW MODE: Read-only preview. Switch to 'Raw AI Source' to edit text."
+                                                ? "EDIT MODE: You can click directly inside the template above to edit the final email layout and text."
                                                 : "EDIT MODE: The text above is the raw AI body. It will be wrapped inside the selected HTML template upon dispatch."}
                                         </div>
                                         {/* Actions Footer */}
-                                        <div className="p-4 border-t border-ink bg-paper flex justify-between items-center gap-4">
+                                        <div className="p-4 border-t border-ink bg-paper flex flex-wrap justify-between items-center gap-4">
                                             <button
                                                 onClick={handleRegenerate}
                                                 disabled={isRegenerating}
@@ -601,7 +647,7 @@ export default function IntelPage({ params }) {
                                                 <span className={`material-symbols-outlined text-lg ${isRegenerating ? 'animate-spin' : ''}`}>autorenew</span>
                                                 {isRegenerating ? 'WORKING...' : 'REGENERATE'}
                                             </button>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 {/* Email-sent badge + re-send option */}
                                                 {target.emailSent && (
                                                     <div className="flex items-center gap-2">
@@ -619,11 +665,24 @@ export default function IntelPage({ params }) {
                                                                 if (!confirm("This lead has already received an email. Send again anyway?")) return;
                                                                 setIsSending(true);
                                                                 try {
-                                                                    const contentBody = document.getElementById("email-editor")?.innerHTML || target.draft.map(d => d.content).join("");
+                                                                    let contentBody = "";
+                                                                    let finalTemplateId = selectedTemplate || null;
+                                                                    if (previewHtml) {
+                                                                        const iframeDoc = document.getElementById("email-preview-iframe")?.contentDocument;
+                                                                        if (iframeDoc && iframeDoc.body.innerHTML.trim() !== "") {
+                                                                            contentBody = iframeDoc.documentElement.outerHTML;
+                                                                            finalTemplateId = null;
+                                                                        } else {
+                                                                            contentBody = rawEditorContent || target.draft.map(d => d.content).join("");
+                                                                        }
+                                                                    } else {
+                                                                        contentBody = document.getElementById("email-editor")?.innerHTML || rawEditorContent || target.draft.map(d => d.content).join("");
+                                                                    }
+
                                                                     const res = await fetch(`${API}/leads/${id}/approve-email`, {
                                                                         method: "POST",
                                                                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
-                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true, template_id: selectedTemplate || null })
+                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true, template_id: finalTemplateId })
                                                                     });
                                                                     if (!res.ok) throw new Error("Failed");
                                                                     alert("Email re-sent successfully.");
@@ -657,6 +716,14 @@ export default function IntelPage({ params }) {
                                                 <button className="flex items-center gap-2 px-4 py-2 border border-ink hover:bg-mute transition-colors font-display font-medium text-sm">
                                                     <span className="material-symbols-outlined text-lg">content_copy</span>
                                                     COPY
+                                                </button>
+                                                <button
+                                                    onClick={handleDeleteLead}
+                                                    className="flex items-center gap-2 px-4 py-2 border border-ink bg-paper hover:bg-red-50 text-red-600 hover:text-red-700 font-display font-medium text-sm transition-colors"
+                                                    title="Delete Lead Permanentely"
+                                                >
+                                                    <span className="material-symbols-outlined text-lg">delete</span>
+                                                    DELETE
                                                 </button>
                                                 <button
                                                     onClick={handleApproveEmail}

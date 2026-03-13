@@ -61,29 +61,48 @@ def _inject_tracking(html_content: str, tracking_token: str, base_url: str) -> s
     html_content = re.sub(r'href="(https?://[^"]+)"', rewrite_link, html_content)
 
     # ── Step 1.5: Convert bare URLs to clickable tracked links ───────────────
+    # This regex matches URLs that are NOT preceded by href=" or similar attributes,
+    # and NOT already inside an <a> tag content.
+    # We use a trick: match <a> tags first and keep them, or match URLs.
     def rewrite_bare_link(match: re.Match) -> str:
-        original_url = match.group(1)
-        # Avoid double-rewriting if it's already a tracking URL
-        if base_url in original_url:
-            return original_url
+        tag_match = match.group(1)
+        url_match = match.group(2)
         
-        encoded_url  = quote(original_url, safe="")
+        if tag_match:
+            return tag_match # Return <a> tag as-is
+            
+        # Avoid double-rewriting if it's already a tracking URL
+        if base_url in url_match:
+            return url_match
+        
+        encoded_url  = quote(url_match, safe="")
         track_url    = (
             f"{base_url}/api/track/click"
             f"?token={tracking_token}&url={encoded_url}"
         )
-        return f'<a href="{track_url}">{original_url}</a>'
+        return f'<a href="{track_url}">{url_match}</a>'
         
-    # Match URLs not preceded by a quote (i.e. not inside an attribute)
-    html_content = re.sub(r'(?<!["\'])(https?://[^\s<>"\']+)', rewrite_bare_link, html_content)
+    # Pattern: match <a>...</a> OR a standalone URL
+    pattern = r'(<a\s+[^>]*>.*?</a>)|(?<!["\'])(https?://[^\s<>"\']+)'
+    html_content = re.sub(pattern, rewrite_bare_link, html_content, flags=re.IGNORECASE | re.DOTALL)
 
-    # ── Step 2: Append open-tracking pixel ────────────────────────────────────
+    # ── Step 2: Inject open-tracking pixel ────────────────────────────────────
+    pixel_endpoint = f"{base_url}/api/track/open?token={tracking_token}"
     pixel = (
-        f'<img src="{base_url}/api/track/open?token={tracking_token}&ngrok-skip-browser-warning=1" '
+        f'<img src="{pixel_endpoint}&ngrok-skip-browser-warning=1" '
         f'width="1" height="1" '
         f'style="display:none!important;mso-hide:all;border:0;margin:0;padding:0" '
         f'alt="" />'
     )
+    
+    # Avoid double-injecting the SAME PIXEL
+    if pixel_endpoint in html_content:
+        return html_content
+
+    if "</body>" in html_content.lower():
+        # Inject just before the closing body tag to improve reliability/deliverability
+        return re.sub(r'(</body>)', f'{pixel}\\1', html_content, flags=re.IGNORECASE)
+    
     return html_content + pixel
 
 
@@ -122,6 +141,10 @@ class EmailService:
             base_url     = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
             html_content = _inject_tracking(html_content, tracking_token, base_url)
 
+        if not to_address or "@" not in str(to_address):
+            print(f"Skipping email send: Invalid or missing recipient address '{to_address}'")
+            raise ValueError(f"Invalid recipient email address: {to_address}")
+
         if not smtp_user or not smtp_pass:
             # Fallback for local testing if SMTP isn't configured
             print(f"\n[MOCK EMAIL] To: {to_address} | Subject: {subject}")
@@ -144,14 +167,16 @@ class EmailService:
                 server = smtplib.SMTP_SSL(smtp_host, smtp_port)
             else:
                 server = smtplib.SMTP(smtp_host, smtp_port)
+                server.ehlo()
                 server.starttls()
+                server.ehlo()
             server.login(smtp_user, smtp_pass)
             server.sendmail(from_email, to_address, msg.as_string())
             server.quit()
 
         try:
             await asyncio.to_thread(_send)
-            return True
+            return html_content # Return the tracked HTML so it can be saved to DB
         except Exception as e:
             print(f"Failed to send email via SMTP: {e}")
             raise ValueError(f"SMTP Error: {str(e)}") from e

@@ -13,6 +13,8 @@ from db import (
     email_opens_collection, email_events_collection,
 )
 from dependencies import get_current_user
+from services.email_sender import EmailService
+from services.templating import render_template
 
 router = APIRouter()
 
@@ -341,20 +343,7 @@ async def update_lead_status(record_id: str, payload: dict = Body(...), user=Dep
     return {"status": "success"}
 
 
-def render_template(html: str, lead: dict, company: dict) -> str:
-    """Replace {{placeholder}} tokens in a template HTML with actual lead/company data."""
-    replacements = {
-        "{{customer_name}}": lead.get("profile", {}).get("name", ""),
-        "{{customer_company}}": lead.get("profile", {}).get("company", ""),
-        "{{customer_title}}": lead.get("profile", {}).get("title", ""),
-        "{{personalized_message}}": lead.get("intel", {}).get("email", {}).get("preview", ""),
-        "{{operator_name}}": company.get("contact_person_name", company.get("company_name", "")),
-        "{{operator_company}}": company.get("company_name", ""),
-        "{{operator_email}}": company.get("email", ""),
-    }
-    for token, value in replacements.items():
-        html = html.replace(token, str(value) if value else "")
-    return html
+# Logic moved to services/templating.py
 
 
 @router.post("/{record_id}/approve-email")
@@ -420,35 +409,28 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             # render_template will replace {{personalized_message}} with formatted_ai_content
             final_html_content = render_template(tpl_html, lead_with_ai, company_doc)
 
-    # 1. Send Email
-    from services.email_sender import EmailService
-
     # Generate a secure UUID token for this specific email send
     tracking_token = str(uuid.uuid4())
 
     try:
         print(f"Attempting to send email to {to_email}")
-        await EmailService.send_email(
+        final_tracked_html = await EmailService.send_email(
             company_id=user["company_id"],
             to_address=to_email,
             subject=subject,
             html_content=final_html_content,
             tracking_token=tracking_token,
         )
-        print("Email sent successfully")
+        print(f"Email sent successfully. Final size: {len(final_tracked_html)} bytes")
+        if len(final_tracked_html) > 102000:
+            print("WARNING: Email size exceeds 102KB (Gmail limit). Clipping is likely.")
     except Exception as e:
         import traceback
         traceback.print_exc()
         print(f"Email sending failed with error: {e}")
         raise HTTPException(status_code=500, detail=f"Email delivery failed: {str(e)}")
         
-    # 2. Inject tracking pixel into the content before saving to CRM logs
-    # This ensures the stored snapshot used for engagement tracking matches the sent email.
-    base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
-    from services.email_sender import _inject_tracking
-    final_content = _inject_tracking(content, tracking_token, base_url)
-
-    # 3. Update CRM state
+    # 2. Update CRM state
     now = datetime.utcnow()
     
     await leads_collection.update_one(query, {
@@ -456,7 +438,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             "status": "Email Dispatched",
             "crm.email_sent": True,
             "crm.last_sent_at": now,
-            "intel.email.sent_html": final_content,   # store TRACKED HTML
+            "intel.email.sent_html": final_tracked_html,   # store FULLY TEMPLATED & TRACKED HTML
             "updated_at": now
         }
     })
@@ -467,7 +449,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
         "batch_id": lead_doc.get("batch_id"),
         "lead_id": record_id,
         "agent": "HUMAN",
-        "action": "Approved and dispatched email via UI",
+        "action": f"Approved and dispatched email via UI (Size: {len(final_tracked_html)} bytes)",
         "status": "SUCCESS",
         "timestamp": now
     })
@@ -478,7 +460,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
         "batch_id": lead_doc.get("batch_id"),
         "lead_id": record_id,
         "subject": subject,
-        "content_snapshot": final_content, # store TRACKED HTML
+        "content_snapshot": final_tracked_html, # store FULLY TEMPLATED & TRACKED HTML
         "sent_at": now,
         "status": "delivered",
         "tracking_token": tracking_token,
@@ -537,6 +519,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             "batch_id": lead_doc.get("batch_id"),
             "subject": followup_subject,
             "content": followup_content,
+            "template_id": template_id,
             "status": "pending",
             "scheduled_at": scheduled_at,
             "created_at": now,
@@ -600,7 +583,6 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
         except Exception as e:
             print(f"[BulkApprove] Failed to load template {template_id}: {e}")
 
-    from services.email_sender import EmailService
 
     results = []
 
@@ -637,36 +619,12 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
             continue
 
         # Build email from stored intel
-        intel      = lead_doc.get("intel", {})
-        email_data = intel.get("email", {})
-        subject    = email_data.get("subject", f"Following up — {company}")
+        intel       = lead_doc.get("intel", {})
+        email_data  = intel.get("email", {})
+        subject     = email_data.get("subject", f"Following up — {company}")
         raw_content = email_data.get("preview", "")
-        sent_html   = email_data.get("sent_html", "")   # saved by individual approve-email
 
-        # Convert plain-text preview → HTML (fallback when no individual send happened yet)
-        def plain_to_html(text: str) -> str:
-            if not text:
-                return ""
-            if text.strip().startswith("<"):
-                return text
-            paragraphs = text.split("\n\n")
-            html_parts = []
-            for para in paragraphs:
-                para = para.strip()
-                if not para:
-                    continue
-                para = para.replace("\n", "<br>")
-                html_parts.append(f"<p style='margin:0 0 16px 0;line-height:1.6'>{para}</p>")
-            return (
-                "<div style='font-family:Arial,sans-serif;font-size:15px;color:#1a1a1a;max-width:600px'>"
-                + "".join(html_parts)
-                + "</div>"
-            )
-
-        # Prefer the exact HTML approved individually; fall back to converting plain preview
-        base_content = sent_html if sent_html else plain_to_html(raw_content)
-
-        if not base_content:
+        if not raw_content:
             results.append({
                 "lead_id": lead_id,
                 "name": name,
@@ -675,14 +633,14 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 "reason": "No email draft available — run agent first"
             })
             continue
-            
-        final_html_content = base_content
-        
-        # Apply template if requested and exists
-        if tpl_doc and not sent_html:  # Only apply template if it hasn't already been compiled into sent_html
+
+        # Prepare content exactly like approve_email logic
+        final_html_content = raw_content
+
+        if tpl_doc:
             try:
                 # Format AI content to preserve paragraph breaks
-                formatted_ai_content = base_content.replace("\n", "<br/>")
+                formatted_ai_content = raw_content.replace("\n", "<br/>")
                 formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
 
                 # Temporarily replace {{personalized_message}} placeholder in the lead dict
@@ -693,7 +651,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                     lead_with_ai["intel"]["email"] = {}
                 lead_with_ai["intel"]["email"]["preview"] = formatted_ai_content
 
-                from api.templates import render_blocks_to_html
+                from services.templating import render_blocks_to_html
                 tpl_html = render_blocks_to_html(
                     tpl_doc.get("blocks", []),
                     tpl_doc.get("global_styles", {})
@@ -701,7 +659,14 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 final_html_content = render_template(tpl_html, lead_with_ai, company_doc)
             except Exception as e:
                 print(f"[BulkApprove] Failed to apply template for {lead_id}: {e}")
-                final_html_content = base_content # fallback
+                # Fallback to plain formatting if template fails
+                final_html_content = raw_content
+        else:
+            # Fallback for no template: basic wrapping to ensure it looks reasonable
+            if not raw_content.strip().startswith("<"):
+                paragraphs = raw_content.split("\n\n")
+                html_parts = [f"<p style='margin:0 0 16px 0;'>{p.replace('\\n', '<br/>')}</p>" for p in paragraphs if p.strip()]
+                final_html_content = f"<div style='font-family:Arial,sans-serif;font-size:15px;color:#1a1a1a;max-width:600px'>{''.join(html_parts)}</div>"
 
         # Generate a secure UUID token for this specific email send
         tracking_token = str(uuid.uuid4())
@@ -712,7 +677,8 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 to_email = "mishraabhishek1703@gmail.com"
                 print(f"  [BulkApprove] No lead email for {name}, using default fallback: {to_email}")
 
-            await EmailService.send_email(
+            # 3. Send via SMTP
+            final_tracked_html = await EmailService.send_email(
                 company_id=user["company_id"],
                 to_address=to_email,
                 subject=subject,
@@ -728,6 +694,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                     "crm.email_sent": True,
                     "crm.last_sent_at": now,
                     "crm.timeline.first_contact": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "intel.email.sent_html": final_tracked_html, # save design
                     "updated_at": now
                 }
             })
@@ -737,22 +704,18 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 "batch_id": lead_doc.get("batch_id"),
                 "lead_id": lead_id,
                 "agent": "HUMAN",
-                "action": "Bulk approved and dispatched email via UI",
+                "action": f"Bulk approved and dispatched (Size: {len(final_tracked_html)} bytes)",
                 "status": "SUCCESS",
                 "timestamp": now
             })
 
-            # Inject tracking pixel into the content before saving to CRM logs
-            base_url = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
-            from services.email_sender import _inject_tracking
-            final_content = _inject_tracking(final_html_content, tracking_token, base_url)
-
+            # Save to logs collection
             await email_logs_collection.insert_one({
                 "company_id": user["company_id"],
                 "batch_id": lead_doc.get("batch_id"),
                 "lead_id": lead_id,
                 "subject": subject,
-                "content_snapshot": final_content, # store TRACKED HTML
+                "content_snapshot": final_tracked_html, # store FULLY tracked design
                 "sent_at": now,
                 "status": "delivered",
                 "tracking_token": tracking_token,
@@ -804,6 +767,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                     "batch_id": lead_doc.get("batch_id"),
                     "subject": followup_subject,
                     "content": followup_content,
+                    "template_id": template_id,
                     "status": "pending",
                     "scheduled_at": scheduled_at,
                     "created_at": now,
@@ -978,6 +942,26 @@ async def get_email_engagement(record_id: str, user=Depends(get_current_user)):
         "last_clicked_at": _iso_utc(summary.get("last_clicked_at")) if summary else None,
         "recent_events": recent_events
     }
-    print("ENGAGEMENT RESPONSE:", record_id, result)
     return result
+
+
+@router.delete("/{record_id}")
+async def delete_lead(record_id: str, user=Depends(get_current_user)):
+    """Delete a lead and its associated data."""
+    company_id = user["company_id"]
+    
+    # 1. Delete lead document
+    lead_result = await leads_collection.delete_one({"lead_id": record_id, "company_id": company_id})
+    if lead_result.deleted_count == 0:
+        # Try checking with record_id as string just in case
+        lead_result = await leads_collection.delete_one({"lead_id": record_id, "company_id": company_id})
+        if lead_result.deleted_count == 0:
+             raise HTTPException(status_code=404, detail="Lead not found")
+        
+    # 2. Cleanup associated data
+    await agent_activity_collection.delete_many({"lead_id": record_id, "company_id": company_id})
+    await email_logs_collection.delete_many({"lead_id": record_id, "company_id": company_id})
+    await followup_queue_collection.delete_many({"lead_id": record_id, "company_id": company_id})
+    
+    return {"status": "success", "message": f"Lead {record_id} deleted successfully"}
 

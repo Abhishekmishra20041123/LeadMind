@@ -51,7 +51,7 @@ async def _record_event(token: str, event_type: str, request: Request):
     open_inc   = 1 if event_type == "open"  else 0
     click_inc  = 1 if event_type == "click" else 0
 
-    # Get existing record to check if first_event needs to be set
+    # Get existing record to check state
     existing = await email_opens_collection.find_one({"token": token})
     
     set_fields = {}
@@ -60,9 +60,19 @@ async def _record_event(token: str, event_type: str, request: Request):
         if not existing or not existing.get("first_opened_at"):
             set_fields["first_opened_at"] = now
     else:
+        # It's a click.
         set_fields["last_clicked_at"] = now
         if not existing or not existing.get("first_clicked_at"):
             set_fields["first_clicked_at"] = now
+            
+        # 💡 HEURISTIC: A click implies an open. 
+        # If open_count is still 0, increment it once on the first click.
+        if not existing or existing.get("open_count", 0) == 0:
+            open_inc = 1
+            # Also set the opened_at timestamps if they were never set
+            if not existing or not existing.get("first_opened_at"):
+                set_fields["first_opened_at"] = now
+            set_fields["last_opened_at"] = now
 
     open_update = {
         "$inc": {"open_count": open_inc, "click_count": click_inc},

@@ -44,7 +44,7 @@ class IntentQualifierAgent:
                 "company": str(row.get("company", "")),
                 "title": str(row.get("title", "")),
                 "industry": str(row.get("industry", "")),
-                "website_visits": int(row.get("website_visits", 0)),
+                "visits": int(row.get("visits", row.get("website_visits", 0))),  # support both column names
                 "content_downloads": int(row.get("content_downloads", 0))
             }
             leads_list.append(lead)

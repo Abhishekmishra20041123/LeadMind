@@ -275,7 +275,7 @@ export default function IntelPage({ params }) {
                         <span className="text-ink/30">/</span>
                         <span className="text-ink/40">THE LEDGER</span>
                         <span className="text-ink/30">/</span>
-                        <span className="text-primary font-bold">INTELLIGENCE REPORT</span>
+                        <span className="text-primary font-bold">INSIGHTS REPORT</span>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2 px-3 py-1 bg-mute border border-ink">
@@ -452,7 +452,7 @@ export default function IntelPage({ params }) {
                                         </div>
                                         {/* News Hits */}
                                         <div className="flex flex-col gap-3">
-                                            <h4 className="font-mono text-xs text-ink/40 uppercase">Intelligence Hits</h4>
+                                            <h4 className="font-mono text-xs text-ink/40 uppercase">Key Insights</h4>
                                             <ul className="flex flex-col gap-2">
                                                 {target.news.map((item, i) => (
                                                     <li key={i} className="flex gap-2 items-start text-sm group cursor-pointer">

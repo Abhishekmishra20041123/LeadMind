@@ -25,8 +25,10 @@ function AgentMonitorView() {
                 .catch(console.error)
                 .finally(() => setFetchingLatest(false));
         } else {
-            setActiveBatchId(batchId);
-            setFetchingLatest(false);
+            setTimeout(() => {
+                setActiveBatchId(batchId);
+                setFetchingLatest(false);
+            }, 0);
         }
     }, [batchId]);
 
@@ -87,12 +89,7 @@ function AgentMonitorView() {
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <button className="h-8 px-4 border border-ink bg-ink text-paper hover:bg-primary font-mono text-xs font-bold uppercase transition-colors flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[14px]">download</span>
-                        Export Logs
-                    </button>
-                </div>
+
             </header>
 
             {/* PIPELINE VISUALIZATION (SWIM LANES) */}
@@ -133,7 +130,7 @@ function AgentMonitorView() {
 
                                         <div className="flex justify-between items-start">
                                             <span className={`font-mono text-xs ${isRunning ? 'text-primary font-bold' : isCompleted ? 'text-paper/60' : isError ? 'text-red-500 font-bold' : 'text-ink/60'}`}>
-                                                0{index + 1} // {abbr}
+                                                0{index + 1} {"//"} {abbr}
                                             </span>
                                             <span className={`material-symbols-outlined ${isRunning ? 'text-primary animate-[spin_3s_linear_infinite]' : isCompleted ? 'text-data-green' : isError ? 'text-red-500' : 'text-ink/40'}`}>
                                                 {isRunning ? 'sync' : isCompleted ? 'check_circle' : isError ? 'error' : 'hourglass_empty'}

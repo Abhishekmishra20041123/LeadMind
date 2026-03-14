@@ -23,13 +23,13 @@ async def migrate_data():
     print("🚀 Starting Legacy Data Migration to MongoDB...")
     
     # 1. Setup default company
-    company_email = "admin@strategicgrid.ai"
+    company_email = "admin@leadmind.ai"
     company = await companies_collection.find_one({"email": company_email})
     if not company:
         print("Creating default admin company...")
         res = await companies_collection.insert_one({
             "email": company_email,
-            "company_name": "Strategic Grid",
+            "company_name": "LeadMind",
             "password_hash": "mock", # Normally set via signup
             "created_at": datetime.utcnow()
         })

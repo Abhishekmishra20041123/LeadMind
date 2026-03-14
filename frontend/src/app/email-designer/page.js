@@ -361,7 +361,7 @@ function BlockProperties({ block, onUpdate, onInsertPlaceholder }) {
         case "greeting": return (
             <div>
                 <div className="mb-3">
-                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Prefix (e.g. "Hi")</div>
+                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Prefix (e.g. &quot;Hi&quot;)</div>
                     <input type="text" value={block.prefix} onChange={e => u("prefix", e.target.value)} className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
                 </div>
                 <div className="mb-3">
@@ -371,7 +371,7 @@ function BlockProperties({ block, onUpdate, onInsertPlaceholder }) {
                     </select>
                 </div>
                 <div className="mb-3">
-                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Suffix (e.g. ",")</div>
+                    <div className="font-mono text-xs text-ink/60 uppercase mb-1">Suffix (e.g. &quot;,&quot;)</div>
                     <input type="text" value={block.suffix} onChange={e => u("suffix", e.target.value)} className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper" />
                 </div>
                 <SliderProp label="Font Size" value={block.fontSize} min={14} max={36} unit="px" onChange={v => u("fontSize", v)} />
@@ -441,7 +441,7 @@ function BlockProperties({ block, onUpdate, onInsertPlaceholder }) {
 
                 <div className="mb-4 p-3 bg-mute border border-ink/20">
                     <div className="font-mono text-xs text-ink/80 uppercase font-bold mb-3">Social Links</div>
-                    <div className="text-[10px] text-ink/50 mb-3 leading-tight">Leave blank to hide. Using URLs will automatically show the platform's icon.</div>
+                    <div className="text-[10px] text-ink/50 mb-3 leading-tight">Leave blank to hide. Using URLs will automatically show the platform&apos;s icon.</div>
                     {["x", "discord", "youtube", "linkedin", "facebook", "instagram"].map(plat => (
                         <div key={plat} className="flex items-center gap-2 mb-2">
                             <span className="font-mono text-[10px] w-16 uppercase">{plat}</span>
@@ -615,7 +615,7 @@ export default function EmailDesigner() {
         } catch { /* ignore */ }
     }, []);
 
-    useEffect(() => { loadTemplateList(); }, [loadTemplateList]);
+    useEffect(() => { setTimeout(() => loadTemplateList(), 0); }, [loadTemplateList]);
 
     // ── Block mutations ────────────────────────────────────────────────────────
     const addBlock = (type) => {

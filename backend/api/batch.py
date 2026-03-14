@@ -280,6 +280,108 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         await push_batch_log(batch_id, f"FATAL ERROR during batch processing: {str(e)}")
         await update_batch_progress(batch_id, { "status": "failed", "percent": 0 })
 
+@router.post("/upload-smart")
+async def upload_smart(
+    background_tasks: BackgroundTasks,
+    leads_file: UploadFile = File(...),
+    leads_mapping: str = Form(...),
+    emails_file: UploadFile = File(None),
+    emails_mapping: str = Form(None),
+    start_index: int = Form(None),
+    end_index: int = Form(None),
+    user=Depends(get_current_user)
+):
+    try:
+        import uuid
+        date_str = datetime.utcnow().strftime("%Y_%m_%d")
+        short_id = str(uuid.uuid4())[:8].upper()
+        batch_id = f"BATCH_{date_str}_{short_id}"
+        
+        batch_dir = os.path.join(BATCHES_DIR, batch_id)
+        os.makedirs(batch_dir, exist_ok=True)
+        company_id = user["company_id"]
+
+        async def transform_and_save(upload_file: UploadFile, mapping_str: str, filename: str, file_type: str):
+            mapping = json.loads(mapping_str)
+            contents = await upload_file.read()
+            df = pd.read_csv(io.BytesIO(contents))
+            
+            # Apply AI mapping
+            df.rename(columns=mapping, inplace=True)
+            df = df[list(mapping.values())] # Keep only mapped columns
+            
+            # Inject defaults
+            if file_type == "leads":
+                if "name" not in df.columns: df["name"] = "Unknown Name"
+                if "company" not in df.columns: df["company"] = "Unknown Company"
+                if "title" not in df.columns: df["title"] = ""
+                if "industry" not in df.columns: df["industry"] = ""
+                if "region" not in df.columns: df["region"] = ""
+                if "visits" not in df.columns: df["visits"] = 1
+                if "pages_per_visit" not in df.columns: df["pages_per_visit"] = 1.0
+                if "time_on_site" not in df.columns: df["time_on_site"] = 0
+                if "content_downloads" not in df.columns: df["content_downloads"] = 0
+                if "lead_source" not in df.columns: df["lead_source"] = "Import"
+                if "converted" not in df.columns: df["converted"] = 0
+                if "stage" not in df.columns: df["stage"] = "Prospecting"
+                if "intent_score" not in df.columns: df["intent_score"] = 0.0
+                if "status" not in df.columns: df["status"] = "New"
+                
+                # rename optional behavior columns to match old target schema if diff
+                if "website_visits" in df.columns: df.rename(columns={"website_visits": "visits"}, inplace=True)
+                
+                # Preserve existing lead_id if mapped; only generate new ones if absent
+                if "lead_id" not in df.columns:
+                    df['lead_id'] = ['L' + str(i).zfill(5) for i in range(1, len(df) + 1)]
+                
+            elif file_type == "emails":
+                if "subject" not in df.columns: df["subject"] = "No Subject"
+                if "email_text" not in df.columns: df["email_text"] = ""
+                if "opened" not in df.columns: df["opened"] = 0
+                if "replied" not in df.columns: df["replied"] = 0
+                if "click_count" not in df.columns: df["click_count"] = 0
+                if "email_type" not in df.columns: df["email_type"] = "Follow-up"
+                if "response_status" not in df.columns: df["response_status"] = "No Reply"
+
+            df = df.fillna("")
+            df.to_csv(os.path.join(batch_dir, filename), index=False)
+            return df.to_dict('records')
+
+        leads_records = await transform_and_save(leads_file, leads_mapping, "Leads_Data.csv", "leads")
+        
+        email_records = []
+        if emails_file and emails_mapping:
+            email_records = await transform_and_save(emails_file, emails_mapping, "Email_Logs.csv", "emails")
+
+        # Save batch tracking doc
+        await batches_collection.insert_one({
+            "batch_id": batch_id,
+            "company_id": company_id,
+            "created_at": datetime.utcnow(),
+            "status": "processing",
+            "percent": 0,
+            "error": None,
+            "logs": [],
+            "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] }
+        })
+
+        if email_records:
+            for rec in email_records:
+                rec["company_id"] = company_id
+                rec["batch_id"] = batch_id
+            await email_logs_collection.insert_many(email_records)
+            
+        background_tasks.add_task(process_batch_background, str(company_id), batch_id, start_index, end_index)
+        
+        return {
+            "batch_id": batch_id,
+            "status": "processing",
+            "files_received": 2 if emails_file else 1
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Smart Batch upload rejected: {str(e)}")
+
 @router.post("/upload")
 async def upload_batch(
     background_tasks: BackgroundTasks,

@@ -52,19 +52,10 @@ export default function MissionControl() {
             {/* Page Header */}
             <div className="bg-paper border-b border-ink px-8 py-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4 shrink-0">
                 <div>
-                    <h2 className="font-display text-4xl font-bold uppercase tracking-tighter leading-none mb-1">Command Center</h2>
+                    <h2 className="font-display text-4xl font-bold uppercase tracking-tighter leading-none mb-1">Dashboard</h2>
                     <p className="font-mono text-sm text-ink/60">Global Overview // <span id="current-date">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}</span></p>
                 </div>
-                <div className="flex gap-4">
-                    <button className="h-10 px-6 border border-ink bg-paper hover:bg-mute font-mono text-xs uppercase flex items-center gap-2 transition-colors">
-                        <span className="material-symbols-outlined text-[16px]">refresh</span>
-                        Refresh Data
-                    </button>
-                    <button onClick={() => router.push('/upload')} className="h-10 px-6 bg-primary text-white font-mono text-xs uppercase font-bold hover:bg-ink transition-colors flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px]">add</span>
-                        New Campaign
-                    </button>
-                </div>
+
             </div>
 
             <div className="p-8 flex flex-col gap-8 max-w-[1600px] w-full mx-auto">
@@ -104,7 +95,7 @@ export default function MissionControl() {
                     <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
                         <div className="flex justify-between items-end border-b-3 border-ink pb-2">
                             <h3 className="font-display text-2xl font-bold uppercase">Priority Targets</h3>
-                            <a className="font-mono text-xs uppercase underline hover:text-primary" href="/ledger">View Full Ledger</a>
+                            <a className="font-mono text-xs uppercase underline hover:text-primary" href="/ledger">View Sales Pipeline</a>
                         </div>
                         <div className="flex flex-col gap-4">
                             {targets.map((t, i) => (
@@ -134,7 +125,7 @@ export default function MissionControl() {
                                         <div className="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 pt-4 border-t border-dashed border-ink/30">
                                             <p className="text-sm font-medium">Recent Signal: <span className="font-normal text-ink/70">{t.signal}</span></p>
                                             <a href={`/intel/${t.id}`} className="px-6 py-2 border border-ink font-mono text-xs uppercase font-bold hover:bg-ink hover:text-white transition-colors flex items-center justify-center gap-2 shrink-0">
-                                                Review Intel <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                                View Insights <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                                             </a>
                                         </div>
                                     </div>

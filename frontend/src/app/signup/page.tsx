@@ -124,10 +124,10 @@ export default function SignupPage() {
                     <div className="flex items-center justify-between p-6 border-b border-slate-200">
                         <div className="flex items-center gap-4">
                             <span className="material-symbols-outlined text-slate-900">arrow_back</span>
-                            <h2 className="text-slate-900 text-xl font-bold uppercase tracking-tight">Signup Stage 1</h2>
+                            <h2 className="text-slate-900 text-xl font-bold uppercase tracking-tight">Step 1</h2>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-bold">Protocol</span>
+                            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-bold">Step</span>
                             <span className="font-mono text-[12px] text-primary font-bold">1 of 3</span>
                         </div>
                     </div>
@@ -337,7 +337,7 @@ export default function SignupPage() {
                                     <div className="w-2 h-2 bg-primary rounded-full"></div>
                                     <span className="font-mono text-[9px] text-black/40 uppercase tracking-widest leading-none">Operational Security Level 4</span>
                                 </div>
-                                <span className="font-mono text-[9px] text-black/40 uppercase tracking-widest leading-none ml-4">Strategic Grid Access Control</span>
+                                <span className="font-mono text-[9px] text-black/40 uppercase tracking-widest leading-none ml-4">LeadMind Access Control</span>
                             </div>
                         </div>
                     </div>
@@ -345,7 +345,7 @@ export default function SignupPage() {
 
                 <div className="md:hidden fixed bottom-6 left-2 pointer-events-none z-20">
                     <p className="font-mono text-[8px] text-black/20 vertical-text uppercase tracking-[0.3em] font-bold">
-                        STRATEGIC GRID // SYSTEM V4.0.1
+                        LEADMIND // SYSTEM V4.0.1
                     </p>
                 </div>
                 <div className="hidden md:block fixed bottom-12 left-12 pointer-events-none">
@@ -403,8 +403,8 @@ export default function SignupPage() {
                         </div>
 
                         <div className="mb-8">
-                            <h2 className="text-black text-4xl font-bold leading-none tracking-tight mb-2">Signup Stage 3</h2>
-                            <p className="text-black/60 text-lg font-medium">Security protocol activation</p>
+                            <h2 className="text-black text-4xl font-bold leading-none tracking-tight mb-2">Step 3</h2>
+                            <p className="text-black/60 text-lg font-medium">Security settings configuration</p>
                         </div>
 
                         <form className="space-y-6" onSubmit={handleSubmit}>

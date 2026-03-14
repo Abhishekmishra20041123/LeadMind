@@ -13,7 +13,9 @@ export default function DashboardLayout({ children }) {
     if (!token) {
       router.replace("/login");
     } else {
-      setIsAuthorized(true);
+      setTimeout(() => {
+          setIsAuthorized(true);
+      }, 0);
     }
   }, [router]);
 

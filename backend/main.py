@@ -9,6 +9,7 @@ from api.batch import router as batch_router
 from api.auth import router as auth_router
 from api.tracking import router as tracking_router
 from api.templates import router as templates_router
+from api.smart_upload import router as smart_upload_router
 from db import create_indexes
 from services.scheduler import scheduler_loop
 import asyncio
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler_task.cancel()
 
-app = FastAPI(title="Strategic Grid API", lifespan=lifespan)
+app = FastAPI(title="LeadMind API", lifespan=lifespan)
 
 # Ensure public logos directory exists before mounting StaticFiles
 os.makedirs("public/logos", exist_ok=True)
@@ -49,5 +50,6 @@ app.include_router(agents_router,    prefix="/api/agents")
 app.include_router(batch_router,     prefix="/api/batch")
 app.include_router(auth_router,      prefix="/api/auth")
 app.include_router(templates_router, prefix="/api/templates")
+app.include_router(smart_upload_router, prefix="/api/smart-upload")
 
 

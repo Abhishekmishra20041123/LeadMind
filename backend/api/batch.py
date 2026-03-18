@@ -13,6 +13,7 @@ import json
 import pandas as pd
 from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form, Depends
+from typing import List
 import asyncio
 from bson import ObjectId
 
@@ -92,16 +93,43 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         await asyncio.sleep(1) # Give the UI a second to process the success response
         company_id = ObjectId(company_id_str)
         
-        batch_dir = os.path.join(BATCHES_DIR, batch_id)
-        leads_file = os.path.join(batch_dir, "Leads_Data.csv")
-        emails_file = os.path.join(batch_dir, "Email_Logs.csv")
+        # Fetch batch to get discovery results
+        batch_doc = await batches_collection.find_one({"batch_id": batch_id})
+        discovery = batch_doc.get("discovery_result", {})
         
-        if not os.path.exists(leads_file):
-            await update_batch_progress(batch_id, { "status": "failed", "error": "Leads file missing" })
+        # === VALIDATION FIX: Check if the data is actually usable before proceeding ===
+        is_sufficient = discovery.get("is_sufficient", True)
+        if not is_sufficient:
+            error_reason = discovery.get("reasoning", "The uploaded CSV does not contain enough actionable fields (e.g. missing identities or behavioral metrics) to run the AI pipeline.")
+            print(f"[Validation Failed] {error_reason}")
+            await update_batch_progress(batch_id, {
+                "status": "failed",
+                "error": f"Insufficient Data: {error_reason}"
+            })
             return
             
+        schema_mapping = discovery.get("schema_mapping", {})
+        files_roles = discovery.get("files_roles", {})
+        
+        primary_file = files_roles.get("primary_leads_file") or "Leads_Data.csv"
+        email_file = files_roles.get("email_history_file") or "Email_Logs.csv"
+        
+        batch_dir = os.path.join(BATCHES_DIR, batch_id)
+        
+        leads_file = os.path.join(batch_dir, os.path.basename(primary_file))
+        emails_file = os.path.join(batch_dir, os.path.basename(email_file)) if email_file else None
+        
+        if not os.path.exists(leads_file):
+            # Fallback to first csv
+            csvs = [f for f in os.listdir(batch_dir) if f.endswith('.csv')]
+            if csvs:
+                leads_file = os.path.join(batch_dir, csvs[0])
+            else:
+                await update_batch_progress(batch_id, { "status": "failed", "error": "Leads file missing" })
+                return
+            
         df = pd.read_csv(leads_file)
-        emails_df = pd.read_csv(emails_file) if os.path.exists(emails_file) else pd.DataFrame()
+        emails_df = pd.read_csv(emails_file) if emails_file and os.path.exists(emails_file) else pd.DataFrame()
         
         original_total = len(df)
         start_idx = start_index if start_index is not None and start_index >= 0 else 0
@@ -134,10 +162,132 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         processed = 0
         semaphore = asyncio.Semaphore(5)  # Limit concurrent LangGraph executions (sync LLM calls)
 
+        def safe_num(val, default=0, as_float=False):
+            """Safely convert a value to int/float. Handles pipe-separated strings like '8 | 5 | 4'."""
+            if val is None or (hasattr(val, '__class__') and val.__class__.__name__ == 'float' and str(val) == 'nan'):
+                return float(default) if as_float else int(default)
+            s = str(val).split('|')[0].split(',')[0].strip()
+            try:
+                return float(s) if as_float else int(float(s))
+            except (ValueError, TypeError):
+                return float(default) if as_float else int(default)
+
+        def get_mapped_val(row, mapping_key, default=None, is_list=False):
+            """Helper to extract values from row based on schema mapping keys"""
+            cols = []
+            if isinstance(mapping_key, str):
+                cols = [c.strip() for c in mapping_key.split(",") if c.strip()]
+            elif isinstance(mapping_key, list):
+                cols = mapping_key
+            
+            # Find the actual column in the row (case-insensitive)
+            row_cols_lower = {c.lower(): c for c in row.index}
+            
+            found_vals = []
+            for col in cols:
+                actual_col = row_cols_lower.get(col.lower())
+                if actual_col and pd.notna(row[actual_col]):
+                    val = row[actual_col]
+                    if is_list:
+                        # Handle pipe-separated or comma-separated links within a cell
+                        sub_vals = [v.strip() for v in str(val).replace("|", ",").split(",") if v.strip()]
+                        found_vals.extend(sub_vals)
+                    else:
+                        return val
+            
+            return list(set(found_vals)) if is_list else default
+
         async def process_single_lead(index, row):
             nonlocal processed
-            lead_dict = row.dropna().to_dict()
-            lead_id = str(lead_dict.get("lead_id", ""))
+            
+            # Use dynamic mapping to get core fields
+            lead_id_col = schema_mapping.get("lead_id", "lead_id")
+            lead_id = str(get_mapped_val(row, lead_id_col, f"L{index}"))
+            
+            # Identity - support common aliases
+            first_name = get_mapped_val(row, ["First_Name", "First Name", "firstname", "first_name", "first"], "")
+            last_name = get_mapped_val(row, ["Last_Name", "Last Name", "lastname", "last_name", "last"], "")
+            
+            full_name = f"{first_name} {last_name}".strip()
+            if not full_name:
+                full_name = get_mapped_val(row, schema_mapping.get("identity_fields", ["Name", "Full Name", "user_name", "User"]), "Lead")
+            
+            email = get_mapped_val(row, ["Email", "email", "Email_Address", "Email Address"], "contact@unknown.com")
+            
+            # Behavior - needed for company inference
+            behavior = schema_mapping.get("behavioral_fields", {})
+            content_links_mapping = behavior.get("content_links", "page_link")
+            aggregated_links = get_mapped_val(row, content_links_mapping, is_list=True)
+
+            # --- SMART MAPPING: Handle Company/Organization ---
+            # 1. Try explicit columns and mapping
+            company_mapped = get_mapped_val(row, ["Company", "Organization", "Account", "Employer", "Brand", "Business", "entity"], None)
+            
+            # 2. B2C Fallback: Infer from product links (e.g. tiffany.com -> Tiffany)
+            if not company_mapped or str(company_mapped).lower() == "unknown":
+                from urllib.parse import urlparse
+                for link in aggregated_links:
+                    if str(link).startswith("http") and "." in str(link):
+                        domain = urlparse(str(link)).netloc
+                        if domain:
+                            domain_part = domain.replace("www.", "").split(".")[0]
+                            if len(domain_part) > 2: # filter out tiny domains
+                                company_mapped = domain_part.capitalize()
+                                break
+            
+            # 3. Batch Level Fallback: Use the identified business name from discovery
+            if not company_mapped or str(company_mapped).lower() == "unknown":
+                company_mapped = discovery.get("business_context", {}).get("company_name", "Organization")
+
+            # --- SMART MAPPING: Handle Title/Role ---
+            title = get_mapped_val(row, ["Title", "Job", "Position", "Role", "job_title", "Occupation"], None)
+            if not title or str(title).lower() == "unknown":
+                # Industry-aware title generation
+                industry_hint = str(discovery.get("business_context", {}).get("industry", "generic")).lower()
+                if any(x in industry_hint for x in ["ecommerce", "e-commerce", "retail", "shop"]):
+                    title = "Customer"
+                elif any(x in industry_hint for x in ["book", "publish", "read"]):
+                    title = "Reader"
+                elif any(x in industry_hint for x in ["boat", "marine", "sail"]):
+                    title = "Enthusiast" # User requested enthusiast for boats
+                elif any(x in industry_hint for x in ["jewelry", "luxury", "diamond", "tiffany"]):
+                    title = "Luxury Enthusiast"
+                else:
+                    title = "Professional" # Default for B2B
+
+            region = get_mapped_val(row, ["Region", "City", "State", "Country", "Location"], "Global")
+            lead_source = get_mapped_val(row, ["Lead_Source", "Source", "UTM_Source", "Medium"], "Direct")
+            industry = get_mapped_val(row, ["Industry", "Sector", "Niche"], discovery.get("business_context", {}).get("industry", "Business"))
+            
+            # Behavior
+            behavior = schema_mapping.get("behavioral_fields", {})
+            visits = safe_num(get_mapped_val(row, behavior.get("visits", "visits"), 0))
+            time_spent = safe_num(get_mapped_val(row, behavior.get("time_on_site", "time_on_site"), 0.0), as_float=True)
+            pages = safe_num(get_mapped_val(row, behavior.get("depth", "pages_per_visit"), 0.0), as_float=True)
+            
+            # Sales/Stage
+            sales = schema_mapping.get("sales_fields", {})
+            purchased_val = get_mapped_val(row, sales.get("stage", "Lead_Status"), "")
+            converted = str(purchased_val).lower() in ["yes", "customer", "won", "purchased", "active"]
+            deal_value = safe_num(get_mapped_val(row, sales.get("value", "Purchase_Value"), 0.0), as_float=True)
+
+            # Aggregate product links from multiple columns
+            content_links_mapping = behavior.get("content_links", "page_link")
+            aggregated_links = get_mapped_val(row, content_links_mapping, is_list=True)
+            
+            lead_dict = row.to_dict()
+            lead_dict["lead_id"] = lead_id
+            lead_dict["name"] = full_name
+            lead_dict["email"] = email
+            lead_dict["title"] = title
+            lead_dict["company"] = company_mapped
+            lead_dict["industry"] = industry
+            lead_dict["page_link"] = aggregated_links # Standardize for LangGraph
+            lead_dict["visits"] = visits
+            lead_dict["time_on_site"] = time_spent
+            lead_dict["pages_per_visit"] = pages
+            lead_dict["converted"] = converted
+            lead_dict["page_link"] = aggregated_links # Standardize for LangGraph
             
             async with semaphore:
                 if not emails_df.empty and 'lead_id' in emails_df.columns:
@@ -156,8 +306,16 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                         "operator_email": company.get("email", "")
                     }
                     
-                state = {"lead": lead_dict, "email_history": email_history, "operator_info": operator_info}
-                company_name = lead_dict.get('company', 'Unknown')
+                state = {
+                    "lead": lead_dict, 
+                    "email_history": email_history, 
+                    "operator_info": operator_info,
+                    "schema_mapping": schema_mapping # Pass mapping to Agents
+                }
+                
+                # Use mapping to find company name for logs
+                company_col = schema_mapping.get("identity_fields", ["company"])[0] if schema_mapping.get("identity_fields") else 'company'
+                company_name = lead_dict.get(company_col, lead_dict.get('company', 'Unknown'))
                 print(f"\\n[Processing] Lead {lead_id} ({company_name}) through LangGraph pipeline...")
                 await push_batch_log(batch_id, f"Initializing pipeline for {company_name} (Lead ID: {lead_id})")
                 
@@ -192,15 +350,16 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                     "lead_source": lead_dict.get("lead_source"),
                                     "industry": lead_dict.get("industry")
                                 },
+                                "page_link": lead_dict.get("page_link", []),
                                 "contact": {
                                     "email": lead_dict.get("email", ""),
                                     "linkedin": lead_dict.get("linkedin", "")
                                 },
                                 "activity": {
-                                    "visits": lead_dict.get("visits", 0),
-                                    "time_on_site": lead_dict.get("time_on_site", 0.0),
-                                    "pages_per_visit": lead_dict.get("pages_per_visit", 0.0),
-                                    "converted": lead_dict.get("converted", False)
+                                    "visits": visits,
+                                    "time_on_site": time_spent,
+                                    "pages_per_visit": pages,
+                                    "converted": converted
                                 },
                                 "intel": {
                                     "status": "completed",
@@ -218,10 +377,12 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                 "crm": {
                                     "email_sent": False,
                                     "timeline": state.get("timeline", {}),
-                                    "deal_value": state.get("deal_value", 0.0),
-                                    "stage": state.get("crm_stage", "prospect"),
+                                    "deal_value": deal_value,
+                                    "stage": state.get("crm_stage", purchased_val if purchased_val else "prospect"),
                                 },
-                                "status": "Ready",
+                                "raw_data": lead_dict,
+                                "schema_mapping": schema_mapping,
+                                "status": "Completed",
                                 "updated_at": datetime.utcnow()
                             },
                             "$setOnInsert": {"created_at": datetime.utcnow()}
@@ -261,8 +422,12 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                     "total_count": total
                 })
 
-        # Process all leads concurrently
-        tasks = [process_single_lead(index, row) for index, row in df_to_process.iterrows()]
+        # Process all leads with a staggered start to prevent API rate limiting (Microlink/Ollama)
+        tasks = []
+        for index, row in df_to_process.iterrows():
+            tasks.append(process_single_lead(index, row))
+            await asyncio.sleep(1.2) # Add 1.2 seconds of "cool down" between starting each lead
+            
         await asyncio.gather(*tasks)
             
         # Finish
@@ -283,18 +448,15 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
 @router.post("/upload")
 async def upload_batch(
     background_tasks: BackgroundTasks,
-    agent_mapping: UploadFile = File(...),
-    crm_pipeline: UploadFile = File(...),
-    email_logs: UploadFile = File(...),
-    leads_data: UploadFile = File(...),
-    sales_pipeline: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     start_index: int = Form(None),
     end_index: int = Form(None),
     user=Depends(get_current_user)
 ):
     try:
-        import uuid
         date_str = datetime.utcnow().strftime("%Y_%m_%d")
+        import uuid
+        import shutil
         short_id = str(uuid.uuid4())[:8].upper()
         batch_id = f"BATCH_{date_str}_{short_id}"
         
@@ -302,21 +464,43 @@ async def upload_batch(
         os.makedirs(batch_dir, exist_ok=True)
         
         company_id = user["company_id"]
+        company_id_str = str(user["company_id"])
+
+        saved_file_paths = []
+        for file in files:
+            file_path = os.path.join(batch_dir, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_file_paths.append(file_path)
+
+        # 1. Run Data Discovery Agent
+        from agents.data_discovery_agent import DataDiscoveryAgent
+        from api.agents import OllamaWrapper
         
-        # Helper to read into RAM, dump to batch structure, and return records
-        async def save_and_read_file(upload_file: UploadFile, filename: str):
-            contents = await upload_file.read()
-            df = pd.read_csv(io.BytesIO(contents))
-            df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
-            df.to_csv(os.path.join(batch_dir, filename), index=False)
-            return df.to_dict('records')
-            
-        await save_and_read_file(agent_mapping, "Agent_Mapping.csv")
-        crm_records = await save_and_read_file(crm_pipeline, "CRM_Pipeline.csv")
-        email_records = await save_and_read_file(email_logs, "Email_Logs.csv")
-        await save_and_read_file(leads_data, "Leads_Data.csv")
-        sales_records = await save_and_read_file(sales_pipeline, "Sales_Pipeline.csv")
+        # Initialize the same model used in process_batch_background
+        llm = OllamaWrapper('minimax-m2.5:cloud')
+        agent = DataDiscoveryAgent(llm)
+        discovery_result = agent.analyze_data_sources(saved_file_paths)
         
+        # 2. Extract logs and optionally save email history logs
+        schema_mapping = discovery_result.get("schema_mapping", {})
+        files_roles = discovery_result.get("files_roles", {})
+        email_history_file = files_roles.get("email_history_file")
+
+        if email_history_file:
+            email_history_path = os.path.join(batch_dir, os.path.basename(email_history_file))
+            if os.path.exists(email_history_path):
+                try:
+                    emails_df = pd.read_csv(email_history_path)
+                    emails_df = emails_df.loc[:, ~emails_df.columns.str.startswith("Unnamed")]
+                    email_records = emails_df.to_dict('records')
+                    for rec in email_records:
+                        rec["company_id"] = company_id
+                        rec["batch_id"] = batch_id
+                    await email_logs_collection.insert_many(email_records)
+                except Exception as e:
+                    print(f"Error caching email logs: {e}")
+
         # Save batch tracking doc
         await batches_collection.insert_one({
             "batch_id": batch_id,
@@ -326,29 +510,16 @@ async def upload_batch(
             "percent": 0,
             "error": None,
             "logs": [],
-            "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] }
+            "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] },
+            "discovery_result": discovery_result
         })
-
-        # Bulk insert historical emails if present
-        if email_records:
-            for rec in email_records:
-                rec["company_id"] = company_id
-                rec["batch_id"] = batch_id
-            await email_logs_collection.insert_many(email_records)
-            
-        # Bulk insert sales pipeline if present
-        if sales_records:
-            for rec in sales_records:
-                rec["company_id"] = company_id
-                rec["batch_id"] = batch_id
-            await pipeline_collection.insert_many(sales_records)
         
-        background_tasks.add_task(process_batch_background, str(company_id), batch_id, start_index, end_index)
+        background_tasks.add_task(process_batch_background, company_id_str, batch_id, start_index, end_index)
         
         return {
             "batch_id": batch_id,
             "status": "processing",
-            "files_received": 5
+            "discovery_result": discovery_result
         }
         
     except Exception as e:

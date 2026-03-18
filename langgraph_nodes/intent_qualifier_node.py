@@ -63,7 +63,8 @@ def prepare_data(state):
     if not lead:
         return {**state, "status": "error", "error": "No lead data provided"}
 
-    clean_lead = {
+    clean_lead = lead.copy()
+    clean_lead.update({
         "lead_id": str(lead.get("lead_id", "")),
         "name": str(lead.get("name", "")),
         "company": str(lead.get("company", "")),
@@ -73,9 +74,9 @@ def prepare_data(state):
         "time_on_site": float(lead.get("time_on_site", 0.0)),
         "pages_per_visit": float(lead.get("pages_per_visit", 0.0)),
         "converted": bool(lead.get("converted", False)),
-        # Preserve crm_stage from the CSV (may be stored as 'stage' or 'crm_stage')
         "crm_stage": str(lead.get("crm_stage", "") or lead.get("stage", "") or "prospect"),
-    }
+        "page_link": lead.get("page_link", [])
+    })
 
     lead_id = clean_lead["lead_id"]
     clean_emails = []
@@ -120,13 +121,17 @@ def generate_insights(state, llm=None, prompt_templates=None):
         response = llm.generate_content(prompt)
         response_text = response.text.strip()
 
-        if response_text.startswith("```"):
-            start = response_text.find("{")
-            end = response_text.rfind("}") + 1
-            if start != -1 and end != 0:
-                response_text = response_text[start:end]
-
-        result = json.loads(response_text)
+        try:
+            result = json.loads(response_text)
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"Warning: Failed to parse Intent Insights JSON. Response was: {response_text[:100]}...")
+            return {
+                **state,
+                "status": "completed", # allow pipeline to continue with fallbacks
+                "intent_score": 0.0,
+                "key_signals": [{"signal": "AI parsing error", "strength": "Low"}],
+                "intent_recommendation": {"urgency": "Low"}
+            }
 
         return {
             **state,

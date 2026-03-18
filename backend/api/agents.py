@@ -394,17 +394,20 @@ async def regenerate_node(lead_id: str, node: str, user=Depends(get_current_user
         llm = OllamaWrapper('minimax-m2.5:cloud')
         
         # Build State
+        # Prioritize the full raw dataset if available (added recently for universal ingestion context),
+        # otherwise fallback to manually assembling from the CRM profile
         state = {
-            "lead": {
+            "lead": lead.get("raw_data", {
                 "name": lead.get("profile", {}).get("name", ""),
                 "company": lead.get("profile", {}).get("company", ""),
                 "title": lead.get("profile", {}).get("title", ""),
                 "region": lead.get("profile", {}).get("region", ""),
                 "visits": lead.get("activity", {}).get("visits", 0),
                 "intent_score": lead.get("intel", {}).get("intent_score", 0),
-            },
+            }),
             "operator_info": operator_info,
             "email_history": [],
+            "schema_mapping": lead.get("schema_mapping", {}),
             # Inject existing state so the node has context
             "key_signals": lead.get("intel", {}).get("key_signals", [])
         }

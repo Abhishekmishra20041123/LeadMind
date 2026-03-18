@@ -1,0 +1,2 @@
+student_id,student_name,course_views,study_minutes,modules_completed,interested_courses
+ST_001,Charlie,15,120,8,"https://edustream.io/system-design,https://edustream.io/python-expert"

@@ -3,11 +3,11 @@ import DashboardLayout from "../../components/DashboardLayout";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { uploadBatch } from "../../api/batch";
-import { BatchFileInput } from "../../components/BatchFileInput";
+import { MultiUploadDropZone } from "../../components/UploadDropZone";
 import { useBatchProgress } from "../../hooks/useBatchProgress";
 
 export default function UploadProtocolPage() {
-    const [files, setFiles] = useState({});
+    const [files, setFiles] = useState([]);
     const [uploadStatus, setUploadStatus] = useState("idle"); // idle, uploading, success, error
     const [uploadResult, setUploadResult] = useState(null);
     const [startIndex, setStartIndex] = useState("");
@@ -16,13 +16,8 @@ export default function UploadProtocolPage() {
 
     const progress = useBatchProgress(uploadResult?.batch_id);
 
-    // The form is only ready to upload when all 5 files are populated
-    const ready =
-        files.agentMapping &&
-        files.crmPipeline &&
-        files.emailLogs &&
-        files.leadsData &&
-        files.salesPipeline;
+    // The form is ready to upload when at least 1 file is selected
+    const ready = files.length > 0;
 
     const handleUpload = async () => {
         if (!ready) return;
@@ -76,15 +71,13 @@ export default function UploadProtocolPage() {
                         <div className="overflow-y-auto p-6 flex flex-col gap-6 flex-1">
                             {/* File Inputs List */}
                             <div className="flex flex-col gap-4">
-                                <div className="mb-2">
-                                    <h3 className="font-mono text-sm font-bold uppercase tracking-wider text-ink border-l-4 border-primary pl-3">Required Payloads</h3>
-                                    <p className="font-mono text-xs text-ink/60 mt-2">All 5 structural schemas must be provided for the pipeline execution to unlock.</p>
+                                <div className="mb-2 border-l-4 border-primary pl-3 bg-mute/20 p-2">
+                                    <h3 className="font-mono text-sm font-bold uppercase tracking-wider text-ink">Universal Payloads</h3>
+                                    <p className="font-mono text-xs text-ink/80 mt-1 leading-relaxed">
+                                        Drop any customer data CSVs here. The AI Data Discovery Agent will automatically parse headers, determine semantics, and map structure to the execution core.
+                                    </p>
                                 </div>
-                                <BatchFileInput label="Agent Mappings" fileKey="agentMapping" files={files} setFiles={setFiles} />
-                                <BatchFileInput label="CRM Pipeline" fileKey="crmPipeline" files={files} setFiles={setFiles} />
-                                <BatchFileInput label="Email Logs" fileKey="emailLogs" files={files} setFiles={setFiles} />
-                                <BatchFileInput label="Leads Data" fileKey="leadsData" files={files} setFiles={setFiles} />
-                                <BatchFileInput label="Sales Pipeline" fileKey="salesPipeline" files={files} setFiles={setFiles} />
+                                <MultiUploadDropZone files={files} setFiles={setFiles} />
                             </div>
 
                             {/* Range Selection Inputs */}
@@ -178,7 +171,7 @@ export default function UploadProtocolPage() {
                             <div className="flex gap-4 w-full max-w-md justify-end">
                                 <button
                                     onClick={() => {
-                                        setFiles({});
+                                        setFiles([]);
                                         setUploadStatus("idle");
                                     }}
                                     className="px-6 py-3 border border-ink text-ink font-display font-bold uppercase text-sm hover:bg-mute transition-colors"

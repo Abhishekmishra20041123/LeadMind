@@ -25,7 +25,7 @@ const SAMPLE_VALUES = {
     "{{customer_name}}": "Alex Johnson",
     "{{customer_company}}": "TechVision Corp",
     "{{customer_title}}": "VP of Engineering",
-    "{{personalized_message}}": "We noticed TechVision Corp recently expanded its engineering team and has been investing heavily in cloud infrastructure — this aligns perfectly with what we offer.",
+    "{{personalized_message}}": "I noticed you were admiring our [Product/Service Name] recently. We specialize in helping companies like TechVision Corp achieve their goals with our tailored solutions.",
     "{{operator_name}}": "Sarah Mitchell",
     "{{operator_company}}": "YourCompany Inc.",
     "{{operator_email}}": "sarah@yourcompany.com",

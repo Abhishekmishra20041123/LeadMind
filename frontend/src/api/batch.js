@@ -1,13 +1,11 @@
 const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
-export async function uploadBatch(files, startIndex = null, endIndex = null) {
+export async function uploadBatch(filesArray, startIndex = null, endIndex = null) {
     const formData = new FormData();
 
-    if (files.agentMapping) formData.append("agent_mapping", files.agentMapping);
-    if (files.crmPipeline) formData.append("crm_pipeline", files.crmPipeline);
-    if (files.emailLogs) formData.append("email_logs", files.emailLogs);
-    if (files.leadsData) formData.append("leads_data", files.leadsData);
-    if (files.salesPipeline) formData.append("sales_pipeline", files.salesPipeline);
+    if (filesArray && filesArray.length > 0) {
+        filesArray.forEach((file) => formData.append("files", file));
+    }
 
     // Add optional range parameters
     if (startIndex !== null && startIndex !== "") formData.append("start_index", startIndex);

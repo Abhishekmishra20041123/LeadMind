@@ -181,13 +181,23 @@ async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=
     email_data = intel.get("email", {})
     email_preview = email_data.get("preview", "")
     
-    paragraphs = str(email_preview).replace('\\n', '\n').split('\n')
+    email_preview_str = str(email_preview).replace('\\n', '\n')
     draft_blocks = []
-    for line in paragraphs:
-        if line.strip() == "":
-            draft_blocks.append({"type": "br"})
-        else:
-            draft_blocks.append({"type": "text", "content": line})
+    
+    # THE FIX: If the email is already HTML, do NOT split it by newlines.
+    # Splitting HTML by \n and wrapping each line in <p> completely destroys
+    # <div> and <img> product card structure, making images disappear.
+    # The frontend handles type='html' by rendering it as a raw div (preserving all tags).
+    if email_preview_str.strip().startswith('<'):
+        draft_blocks = [{"type": "html", "content": email_preview_str}]
+    else:
+        # Fallback for plain text emails: split by newlines into blocks
+        for line in email_preview_str.split('\n'):
+            if line.strip() == "":
+                draft_blocks.append({"type": "br"})
+            else:
+                draft_blocks.append({"type": "text", "content": line})
+
             
     quality_indicators = intel.get("quality_indicators", [])
     research_signals = [

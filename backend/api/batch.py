@@ -205,12 +205,27 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             lead_id = str(get_mapped_val(row, lead_id_col, f"L{index}"))
             
             # Identity - support common aliases
+            # Try split first/last name columns
             first_name = get_mapped_val(row, ["First_Name", "First Name", "firstname", "first_name", "first"], "")
             last_name = get_mapped_val(row, ["Last_Name", "Last Name", "lastname", "last_name", "last"], "")
             
             full_name = f"{first_name} {last_name}".strip()
             if not full_name:
-                full_name = get_mapped_val(row, schema_mapping.get("identity_fields", ["Name", "Full Name", "user_name", "User"]), "Lead")
+                # Try common single full-name columns directly (handles CSVs with a plain "name" column)
+                full_name = get_mapped_val(row, ["name", "Name", "Full Name", "full_name", "FullName", "user_name", "User", "Customer Name"], "")
+            if not full_name:
+                # Last resort: use identity_fields from schema_mapping, but skip values that look like IDs
+                identity_cols = schema_mapping.get("identity_fields", [])
+                if isinstance(identity_cols, list):
+                    for col in identity_cols:
+                        val = get_mapped_val(row, [col], "")
+                        val_str = str(val).strip()
+                        # Skip empty values, values that look like IDs (e.g. "L_JX_001"), or "lead_id" columns
+                        if val_str and not val_str.startswith("L_") and col.lower() not in ("lead_id", "id", "email"):
+                            full_name = val_str
+                            break
+            if not full_name:
+                full_name = "Lead"
             
             email = get_mapped_val(row, ["Email", "email", "Email_Address", "Email Address"], "contact@unknown.com")
             

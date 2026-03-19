@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler_task.cancel()
 
-app = FastAPI(title="Strategic Grid API", lifespan=lifespan)
+app = FastAPI(title="LeadMind API", lifespan=lifespan)
 
 # Ensure public logos directory exists before mounting StaticFiles
 os.makedirs("public/logos", exist_ok=True)

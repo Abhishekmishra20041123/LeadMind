@@ -305,7 +305,7 @@ export default function SettingsPage() {
                     {/* HEADER */}
                     <header className="px-8 py-8 border-b-2 border-ink bg-paper z-10">
                         <div className="flex flex-col gap-2">
-                            <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration // v2.4.0</span>
+                            <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration </span>
                             <h1 className="font-display font-bold text-4xl tracking-tight text-ink uppercase">Settings</h1>
                         </div>
                     </header>

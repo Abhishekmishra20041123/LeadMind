@@ -29,7 +29,7 @@ async def migrate_data():
         print("Creating default admin company...")
         res = await companies_collection.insert_one({
             "email": company_email,
-            "company_name": "Strategic Grid",
+            "company_name": "LeadMind",
             "password_hash": "mock", # Normally set via signup
             "created_at": datetime.utcnow()
         })

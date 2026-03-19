@@ -1,5 +1,0 @@
-email_id,lead_id,subject,email_text,stage,opened,replied,sentiment,engagement_score,sent_time,replied_time,response_status,email_type
-E_JX_001,L_JX_001,Thinking of you Sarah!,I hope you're having a lovely day Sarah. I noticed your interest in our engagement rings.,Qualification,True,False,Positive,0.8,2024-12-15T10:00:00,None,Open,Intro
-E_JX_003,L_JX_003,Your Wedding Vision,Hi Emma! Let's talk about the bridal set you liked.,Closed Won,True,True,Positive,0.95,2024-11-05T14:30:00,2024-11-05T15:00:00,Replied,Followup
-E_JX_010,L_JX_010,Ready for the big day?,Hi William! Your wedding band is ready for pickup.,Closed Won,True,True,Positive,0.9,2024-11-25T09:15:00,2024-11-25T11:45:00,Replied,Service
-E_JX_007,L_JX_007,Vintage Jewelry Guide,Hi Sophia! Here is the guide to vintage sapphire rings you requested.,Qualification,True,True,Neutral,0.7,2024-11-28T16:20:00,2024-11-29T10:10:00,Replied,Inquiry

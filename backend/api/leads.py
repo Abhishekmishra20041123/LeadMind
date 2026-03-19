@@ -180,8 +180,10 @@ async def get_lead_details(record_id: str, batch_id: Optional[str] = None, user=
     intel = lead_doc.get("intel", {})
     email_data = intel.get("email", {})
     email_preview = email_data.get("preview", "")
-    
-    email_preview_str = str(email_preview).replace('\\n', '\n')
+
+    # Clean redundant elements like AI footers/buttons
+    from services.templating import clean_ai_content
+    email_preview_str = clean_ai_content(str(email_preview).replace('\\n', '\n'))
     draft_blocks = []
     
     # THE FIX: If the email is already HTML, do NOT split it by newlines.
@@ -305,11 +307,14 @@ async def preview_template(lead_id: str, payload: dict = Body(...), user=Depends
     if not tpl_doc:
         raise HTTPException(status_code=404, detail="Template not found")
         
-    company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+    company_doc = await companies_collection.find_one({"_id": user["company_id"]}) or {}
     
-    # Format AI content to preserve paragraph breaks
-    formatted_ai_content = raw_content.replace("\n", "<br/>")
-    formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
+    # Format AI content (only add breaks for plain text; preserve HTML formatting)
+    if raw_content.strip().startswith("<"):
+        formatted_ai_content = raw_content
+    else:
+        formatted_ai_content = raw_content.replace("\n", "<br/>")
+        formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
     
     # Temporarily replace {{personalized_message}} placeholder in the lead dict
     lead_with_ai = dict(lead_doc)
@@ -397,11 +402,14 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
             tpl_doc = None
 
         if tpl_doc:
-            company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+            company_doc = await companies_collection.find_one({"_id": user["company_id"]}) or {}
             
-            # Format AI content to preserve paragraph breaks, matching the style wrapper
-            formatted_ai_content = content.replace("\n", "<br/>")
-            formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
+            # Format AI content (only add breaks for plain text; preserve HTML formatting)
+            if content.strip().startswith("<"):
+                formatted_ai_content = content
+            else:
+                formatted_ai_content = content.replace("\n", "<br/>")
+                formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
 
             # Temporarily replace {{personalized_message}} placeholder in the lead dict
             lead_with_ai = dict(lead_doc)
@@ -589,7 +597,7 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
                 "company_id": user["company_id"]
             })
             if tpl_doc:
-                company_doc = await companies_collection.find_one({"company_id": user["company_id"]}) or {}
+                company_doc = await companies_collection.find_one({"_id": user["company_id"]}) or {}
         except Exception as e:
             print(f"[BulkApprove] Failed to load template {template_id}: {e}")
 
@@ -649,9 +657,12 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
 
         if tpl_doc:
             try:
-                # Format AI content to preserve paragraph breaks
-                formatted_ai_content = raw_content.replace("\n", "<br/>")
-                formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
+                # Format AI content (only add breaks for plain text; preserve HTML formatting)
+                if raw_content.strip().startswith("<"):
+                    formatted_ai_content = raw_content
+                else:
+                    formatted_ai_content = raw_content.replace("\n", "<br/>")
+                    formatted_ai_content = formatted_ai_content.replace("<p>", "<p style='margin:0 0 16px 0;'>")
 
                 # Temporarily replace {{personalized_message}} placeholder in the lead dict
                 lead_with_ai = dict(lead_doc)

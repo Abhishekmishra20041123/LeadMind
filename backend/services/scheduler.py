@@ -56,7 +56,7 @@ async def process_followups():
                         "company_id": ObjectId(str(company_id))
                     })
                     if tpl_doc:
-                        company_doc = await companies_collection.find_one({"company_id": str(company_id)}) or {}
+                        company_doc = await companies_collection.find_one({"_id": ObjectId(str(company_id))}) or {}
                         
                         # Prepare lead dict for template replacements
                         # We need 'intel.email.preview' to store the body for {{personalized_message}}

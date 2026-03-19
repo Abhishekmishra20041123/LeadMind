@@ -14,10 +14,15 @@ class OllamaResponse:
     def __init__(self, text):
         self.text = text
 
+# ── FIX #4: Share a single session across all instances for HTTP keep-alive ──
+# This reuses TCP connections to Ollama, eliminating handshake overhead per call.
+_ollama_session = requests.Session()
+_ollama_session.headers.update({"Content-Type": "application/json"})
+
 class OllamaWrapper:
     def __init__(self, model_name="minimax-m2.5:cloud"):
         self.model_name = model_name
-        
+
     def generate_content(self, prompt):
         url = "http://127.0.0.1:11434/api/generate"
         payload = {
@@ -25,10 +30,9 @@ class OllamaWrapper:
             "prompt": prompt,
             "stream": False
         }
-        headers = {"Content-Type": "application/json"}
         res = None
         try:
-            res = requests.post(url, json=payload, headers=headers, timeout=120)
+            res = _ollama_session.post(url, json=payload, timeout=120)
             res.raise_for_status()
             data = res.json()
             return OllamaResponse(data.get("response", ""))

@@ -36,7 +36,7 @@ export default function Header() {
             <div className="flex items-center gap-4">
                 <span className="material-symbols-outlined text-[20px]">grid_view</span>
                 <a href="/" className="font-display font-bold text-lg tracking-tight hover:text-primary transition-colors">
-                    STRATEGIC GRID <span className="text-primary text-xs align-top ml-1">v2.4.0</span>
+                    LeadMind <span className="text-primary text-xs align-top ml-1"></span>
                 </a>
             </div>
 

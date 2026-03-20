@@ -47,7 +47,7 @@ export default function UploadProtocolPage() {
                         <div className="size-6 bg-ink text-paper flex items-center justify-center">
                             <span className="material-symbols-outlined text-sm">grid_view</span>
                         </div>
-                        <h2 className="text-ink text-xl font-display font-bold leading-none tracking-[-0.02em] uppercase">STRATEGIC GRID // TERMINAL</h2>
+                        <h2 className="text-ink text-xl font-display font-bold leading-none tracking-[-0.02em] uppercase">LeadMind // TERMINAL</h2>
                     </div>
                 </header>
 

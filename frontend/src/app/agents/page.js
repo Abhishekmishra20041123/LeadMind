@@ -87,12 +87,12 @@ function AgentMonitorView() {
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
+                {/* <div className="flex items-center gap-4">
                     <button className="h-8 px-4 border border-ink bg-ink text-paper hover:bg-primary font-mono text-xs font-bold uppercase transition-colors flex items-center gap-2">
                         <span className="material-symbols-outlined text-[14px]">download</span>
                         Export Logs
                     </button>
-                </div>
+                </div> */}
             </header>
 
             {/* PIPELINE VISUALIZATION (SWIM LANES) */}

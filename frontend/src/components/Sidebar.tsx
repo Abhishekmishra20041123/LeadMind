@@ -5,9 +5,9 @@ export default function Sidebar() {
     const pathname = usePathname();
 
     const navItems = [
-        { name: "Mission Control", path: "/", icon: "dashboard" },
-        { name: "The Ledger", path: "/ledger", icon: "table_chart" },
-        { name: "Upload Protocol", path: "/upload", icon: "cloud_upload" },
+        { name: "Dashboard", path: "/", icon: "dashboard" },
+        { name: "The Leads", path: "/ledger", icon: "table_chart" },
+        { name: "Upload Leads", path: "/upload", icon: "cloud_upload" },
         { name: "Email Designer", path: "/email-designer", icon: "draw" },
         { name: "Agent Monitor", path: "/agents", icon: "memory", badge: "RUNNING" },
         { name: "Settings", path: "/settings", icon: "settings" },
@@ -43,7 +43,7 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            <div className="mt-auto p-6 border-t border-ink text-ink">
+            {/* <div className="mt-auto p-6 border-t border-ink text-ink">
                 <div className="border border-ink p-4 bg-mute">
                     <h4 className="font-mono text-xs text-ink/60 mb-2 uppercase">Storage Usage</h4>
                     <div className="w-full bg-white h-2 border border-ink mb-1">
@@ -54,7 +54,7 @@ export default function Sidebar() {
                         <span>1.2GB FREE</span>
                     </div>
                 </div>
-            </div>
+            </div> */}
         </aside>
     );
 }

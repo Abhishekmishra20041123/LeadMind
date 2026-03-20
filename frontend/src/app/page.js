@@ -52,8 +52,8 @@ export default function MissionControl() {
             {/* Page Header */}
             <div className="bg-paper border-b border-ink px-8 py-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4 shrink-0">
                 <div>
-                    <h2 className="font-display text-4xl font-bold uppercase tracking-tighter leading-none mb-1">Command Center</h2>
-                    <p className="font-mono text-sm text-ink/60">Global Overview // <span id="current-date">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}</span></p>
+                    <h2 className="font-display text-4xl font-bold uppercase tracking-tighter leading-none mb-1">Dashboard</h2>
+                    {/* <p className="font-mono text-sm text-ink/60">Global Overview // <span id="current-date">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}</span></p> */}
                 </div>
                 <div className="flex gap-4">
                     <button className="h-10 px-6 border border-ink bg-paper hover:bg-mute font-mono text-xs uppercase flex items-center gap-2 transition-colors">
@@ -62,7 +62,7 @@ export default function MissionControl() {
                     </button>
                     <button onClick={() => router.push('/upload')} className="h-10 px-6 bg-primary text-white font-mono text-xs uppercase font-bold hover:bg-ink transition-colors flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px]">add</span>
-                        New Campaign
+                        New Leads
                     </button>
                 </div>
             </div>

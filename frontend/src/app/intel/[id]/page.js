@@ -274,7 +274,7 @@ export default function IntelPage({ params }) {
                 {/* Breadcrumbs / Top Bar */}
                 <header className="h-16 border-b border-ink glass-effect flex items-center justify-between px-8 shrink-0 sticky top-0 z-50 transition-premium shadow-sm">
                     <div className="flex items-center gap-2 font-mono text-sm">
-                        <span className="text-ink/40">MISSION CONTROL</span>
+                        <span className="text-ink/40">Dashboard</span>
                         <span className="text-ink/30">/</span>
                         <span className="text-ink/40">THE LEDGER</span>
                         <span className="text-ink/30">/</span>
@@ -343,13 +343,13 @@ export default function IntelPage({ params }) {
                                         <span className="text-ink/50 w-24 shrink-0">SIGNALS</span>
                                         <span className="text-ink font-bold text-right leading-tight max-h-[80px] overflow-y-auto">{target.signal}</span>
                                     </div>
-                                    <div className="flex justify-between items-start gap-2">
+                                    {/* <div className="flex justify-between items-start gap-2">
                                         <span className="text-ink/50 w-24 shrink-0">ACTION</span>
                                         <div className="flex flex-col items-end gap-1">
                                             <span className="text-ink font-bold text-right leading-tight text-primary text-[11px]">{target.intentRecommendation.next_best_action || "Awaiting strategy"}</span>
                                             <span className="bg-mute px-1.5 py-0.5 border border-ink/20 inline-block text-[10px]">URGENCY: {target.intentRecommendation.urgency || "Unknown"}</span>
                                         </div>
-                                    </div>
+                                    </div> */}
                                 </div>
                             </div>
                         </section>

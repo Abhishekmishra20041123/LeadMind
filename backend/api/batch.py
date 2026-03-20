@@ -13,7 +13,7 @@ import json
 import pandas as pd
 from datetime import datetime
 from fastapi import APIRouter, File, UploadFile, HTTPException, BackgroundTasks, Form, Depends
-from typing import List
+from typing import List, Optional
 import asyncio
 from bson import ObjectId
 
@@ -84,14 +84,29 @@ async def get_batch_progress(batch_id: str, user=Depends(get_current_user)):
 
 
 
-async def process_batch_background(company_id_str: str, batch_id: str, start_index: int = None, end_index: int = None):
-    """
-    Background worker that uses LangGraph to process each lead concurrently,
-    writing results securely to MongoDB.
+async def process_batch_background(company_id_str: str, batch_id: str, start_index: int = None, end_index: int = None, saved_file_paths: Optional[list] = None):
+    """ 
+    Background worker that:
+      1. Runs the Data Discovery Agent (so the upload endpoint returns instantly)
+      2. Uses LangGraph to process each lead concurrently, writing results to MongoDB.
     """
     try:
-        await asyncio.sleep(1) # Give the UI a second to process the success response
+        await asyncio.sleep(0.5) # Brief yield so the HTTP response is sent first
         company_id = ObjectId(company_id_str)
+
+        # ── FIX #2: Run Data Discovery here (background), not in the upload handler ──
+        if saved_file_paths:
+            from agents.data_discovery_agent import DataDiscoveryAgent
+            await push_batch_log(batch_id, "Running Data Discovery Agent...")
+            llm_discovery = OllamaWrapper('minimax-m2.5:cloud')
+            agent = DataDiscoveryAgent(llm_discovery)
+            # Run synchronous LLM call in a thread so we don't block the event loop
+            discovery_result = await asyncio.to_thread(agent.analyze_data_sources, saved_file_paths)
+            await batches_collection.update_one(
+                {"batch_id": batch_id},
+                {"$set": {"discovery_result": discovery_result}}
+            )
+            await push_batch_log(batch_id, "Data Discovery complete. Starting lead pipeline...")
         
         # Fetch batch to get discovery results
         batch_doc = await batches_collection.find_one({"batch_id": batch_id})
@@ -142,7 +157,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         # Load the Ollama LLM
         llm = OllamaWrapper('minimax-m2.5:cloud')
         
-        # Compile pipelines
+        # Compile pipelines (once per batch, shared across all leads)
         agents = {
             'research': create_lead_research_graph(llm, lead_research_prompts),
             'intent': create_intent_qualifier_graph(llm, intent_qualifier_prompts),
@@ -150,6 +165,17 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             'timing': create_followup_timing_graph(llm, followup_timing_prompts),
             'logger': create_crm_logger_graph()
         }
+
+        # ── FIX #3: Fetch company doc ONCE before the loop ──
+        company_doc = await companies_collection.find_one({"_id": company_id})
+        operator_info = {}
+        if company_doc:
+            operator_info = {
+                "operator_name": company_doc.get("contact_person_name", company_doc.get("company_name", "Unknown Operator")),
+                "operator_company": company_doc.get("company_name", "Unknown Company"),
+                "operator_website": company_doc.get("domain", "") or company_doc.get("website", ""),
+                "operator_email": company_doc.get("email", "")
+            }
         
         await update_batch_progress(batch_id, {
             "percent": 0,
@@ -160,7 +186,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         })
         
         processed = 0
-        semaphore = asyncio.Semaphore(5)  # Limit concurrent LangGraph executions (sync LLM calls)
+        semaphore = asyncio.Semaphore(5)  # Limit concurrent LangGraph executions
 
         def safe_num(val, default=0, as_float=False):
             """Safely convert a value to int/float. Handles pipe-separated strings like '8 | 5 | 4'."""
@@ -197,7 +223,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             
             return list(set(found_vals)) if is_list else default
 
-        async def process_single_lead(index, row):
+        async def process_single_lead(index, row, _operator_info=operator_info):
             nonlocal processed
             
             # Use dynamic mapping to get core fields
@@ -205,12 +231,27 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             lead_id = str(get_mapped_val(row, lead_id_col, f"L{index}"))
             
             # Identity - support common aliases
+            # Try split first/last name columns
             first_name = get_mapped_val(row, ["First_Name", "First Name", "firstname", "first_name", "first"], "")
             last_name = get_mapped_val(row, ["Last_Name", "Last Name", "lastname", "last_name", "last"], "")
             
             full_name = f"{first_name} {last_name}".strip()
             if not full_name:
-                full_name = get_mapped_val(row, schema_mapping.get("identity_fields", ["Name", "Full Name", "user_name", "User"]), "Lead")
+                # Try common single full-name columns directly (handles CSVs with a plain "name" column)
+                full_name = get_mapped_val(row, ["name", "Name", "Full Name", "full_name", "FullName", "user_name", "User", "Customer Name"], "")
+            if not full_name:
+                # Last resort: use identity_fields from schema_mapping, but skip values that look like IDs
+                identity_cols = schema_mapping.get("identity_fields", [])
+                if isinstance(identity_cols, list):
+                    for col in identity_cols:
+                        val = get_mapped_val(row, [col], "")
+                        val_str = str(val).strip()
+                        # Skip empty values, values that look like IDs (e.g. "L_JX_001"), or "lead_id" columns
+                        if val_str and not val_str.startswith("L_") and col.lower() not in ("lead_id", "id", "email"):
+                            full_name = val_str
+                            break
+            if not full_name:
+                full_name = "Lead"
             
             email = get_mapped_val(row, ["Email", "email", "Email_Address", "Email Address"], "contact@unknown.com")
             
@@ -295,22 +336,11 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                 else:
                     email_history = []
                     
-                # Fetch company details for operator info
-                company = await companies_collection.find_one({"_id": company_id})
-                operator_info = {}
-                if company:
-                    operator_info = {
-                        "operator_name": company.get("contact_person_name", company.get("company_name", "Unknown Operator")),
-                        "operator_company": company.get("company_name", "Unknown Company"),
-                        "operator_website": company.get("domain", "") or company.get("website", ""),
-                        "operator_email": company.get("email", "")
-                    }
-                    
                 state = {
                     "lead": lead_dict, 
                     "email_history": email_history, 
-                    "operator_info": operator_info,
-                    "schema_mapping": schema_mapping # Pass mapping to Agents
+                    "operator_info": _operator_info,   # ── FIX #3: pre-fetched once
+                    "schema_mapping": schema_mapping
                 }
                 
                 # Use mapping to find company name for logs
@@ -422,12 +452,10 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                     "total_count": total
                 })
 
-        # Process all leads with a staggered start to prevent API rate limiting (Microlink/Ollama)
-        tasks = []
-        for index, row in df_to_process.iterrows():
-            tasks.append(process_single_lead(index, row))
-            await asyncio.sleep(1.2) # Add 1.2 seconds of "cool down" between starting each lead
-            
+        # ── FIX #1: Build ALL coroutines first, then gather them concurrently ──
+        # The semaphore (limit=5) already prevents overwhelming Ollama;
+        # the old sleep(1.2) was both wrong (it ran tasks sequentially) and unnecessary.
+        tasks = [process_single_lead(index, row) for index, row in df_to_process.iterrows()]
         await asyncio.gather(*tasks)
             
         # Finish
@@ -473,35 +501,8 @@ async def upload_batch(
                 shutil.copyfileobj(file.file, buffer)
             saved_file_paths.append(file_path)
 
-        # 1. Run Data Discovery Agent
-        from agents.data_discovery_agent import DataDiscoveryAgent
-        from api.agents import OllamaWrapper
-        
-        # Initialize the same model used in process_batch_background
-        llm = OllamaWrapper('minimax-m2.5:cloud')
-        agent = DataDiscoveryAgent(llm)
-        discovery_result = agent.analyze_data_sources(saved_file_paths)
-        
-        # 2. Extract logs and optionally save email history logs
-        schema_mapping = discovery_result.get("schema_mapping", {})
-        files_roles = discovery_result.get("files_roles", {})
-        email_history_file = files_roles.get("email_history_file")
-
-        if email_history_file:
-            email_history_path = os.path.join(batch_dir, os.path.basename(email_history_file))
-            if os.path.exists(email_history_path):
-                try:
-                    emails_df = pd.read_csv(email_history_path)
-                    emails_df = emails_df.loc[:, ~emails_df.columns.str.startswith("Unnamed")]
-                    email_records = emails_df.to_dict('records')
-                    for rec in email_records:
-                        rec["company_id"] = company_id
-                        rec["batch_id"] = batch_id
-                    await email_logs_collection.insert_many(email_records)
-                except Exception as e:
-                    print(f"Error caching email logs: {e}")
-
-        # Save batch tracking doc
+        # ── FIX #2: Save the batch doc immediately (no blocking LLM call here) ──
+        # Discovery will run as the FIRST step inside the background task.
         await batches_collection.insert_one({
             "batch_id": batch_id,
             "company_id": company_id,
@@ -509,17 +510,21 @@ async def upload_batch(
             "status": "processing",
             "percent": 0,
             "error": None,
-            "logs": [],
+            "logs": [f"[{datetime.utcnow().strftime('%H:%M:%S')}] Files uploaded. Queuing discovery & pipeline..."],
             "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] },
-            "discovery_result": discovery_result
+            "discovery_result": {}
         })
-        
-        background_tasks.add_task(process_batch_background, company_id_str, batch_id, start_index, end_index)
+
+        # Pass saved_file_paths into background so discovery runs there
+        background_tasks.add_task(
+            process_batch_background,
+            company_id_str, batch_id, start_index, end_index, saved_file_paths
+        )
         
         return {
             "batch_id": batch_id,
             "status": "processing",
-            "discovery_result": discovery_result
+            "message": "Files received. Discovery & processing started in background."
         }
         
     except Exception as e:

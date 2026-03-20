@@ -41,10 +41,9 @@ async def process_followups():
 
             to_email = lead.get("contact", {}).get("email") if lead else None
             
-            # Fallback for testing
-            if not to_email or "@" not in str(to_email):
-                to_email = "mishraabhishek1703@gmail.com"
-                print(f"[Scheduler] Lead {lead_id} has no valid email, using fallback: {to_email}")
+            # Override to_email to default for now as requested
+            to_email = "mishraabhishek1703@gmail.com"
+            print(f"[Scheduler] Lead {lead_id} being sent to default receiver: {to_email}")
 
             final_html = content
             

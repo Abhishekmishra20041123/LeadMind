@@ -366,7 +366,7 @@ async def approve_email(record_id: str, payload: dict = Body(...), user=Depends(
     """Send approved email and log to CRM. Returns 409 if already sent."""
     subject = payload.get("subject")
     content = payload.get("content")
-    to_email = payload.get("to_email", "mishraabhishek1703@gmail.com")
+    to_email = "mishraabhishek1703@gmail.com"
     force = payload.get("force", False)  # allow forced re-send if explicitly requested
     
     if not subject or not content:
@@ -693,10 +693,9 @@ async def bulk_approve_leads(payload: dict = Body(...), user=Depends(get_current
         tracking_token = str(uuid.uuid4())
 
         try:
-            # Use lead's contact email; fall back to default test email (same as approve-email endpoint)
-            if not to_email:
-                to_email = "mishraabhishek1703@gmail.com"
-                print(f"  [BulkApprove] No lead email for {name}, using default fallback: {to_email}")
+            # Override to_email to default for now as requested
+            to_email = "mishraabhishek1703@gmail.com"
+            print(f"  [BulkApprove] No lead email for {name}, overriding with default: {to_email}")
 
             # 3. Send via SMTP
             final_tracked_html = await EmailService.send_email(

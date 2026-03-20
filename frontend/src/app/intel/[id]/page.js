@@ -114,7 +114,7 @@ export default function IntelPage({ params }) {
                 body: JSON.stringify({
                     subject: target.subject,
                     content: contentBody,
-                    to_email: target.email || "mishraabhishek1703@gmail.com",
+                    to_email: "mishraabhishek1703@gmail.com",
                     template_id: finalTemplateId
                 })
             });
@@ -717,7 +717,7 @@ export default function IntelPage({ params }) {
                                                                     const res = await fetch(`${API}/leads/${id}/approve-email`, {
                                                                         method: "POST",
                                                                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("access_token")}` },
-                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: target.email || "mishraabhishek1703@gmail.com", force: true, template_id: finalTemplateId })
+                                                                        body: JSON.stringify({ subject: target.subject, content: contentBody, to_email: "mishraabhishek1703@gmail.com", force: true, template_id: finalTemplateId })
                                                                     });
                                                                     if (!res.ok) throw new Error("Failed");
                                                                     alert("Email re-sent successfully.");

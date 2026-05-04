@@ -1,9 +1,11 @@
 import asyncio
 from datetime import datetime
 from bson import ObjectId
+import uuid
 from db import (
     followup_queue_collection, leads_collection, email_logs_collection, 
-    agent_activity_collection, email_templates_collection, companies_collection
+    agent_activity_collection, email_templates_collection, companies_collection,
+    email_opens_collection
 )
 from services.email_sender import EmailService
 from services.templating import render_blocks_to_html, render_template
@@ -85,12 +87,25 @@ async def process_followups():
                     print(f"[Scheduler] Warning: Failed to apply template {template_id}: {tpl_err}")
                     # Fallback to raw content if template application fails
 
+            # ── Tracking ────────────────────────────────────────────────────────
+            tracking_token = str(uuid.uuid4())
+            await email_opens_collection.insert_one({
+                "token": tracking_token,
+                "lead_id": lead_id,
+                "company_id": ObjectId(str(company_id)),
+                "subject": subject,
+                "sent_at": datetime.utcnow(),
+                "open_count": 0,
+                "click_count": 0
+            })
+
             # Dispatch
             await EmailService.send_email(
                 company_id=str(company_id),
                 to_address=to_email,
                 subject=subject,
-                html_content=final_html
+                html_content=final_html,
+                tracking_token=tracking_token
             )
             
             # Mark complete

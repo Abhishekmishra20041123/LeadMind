@@ -6,6 +6,7 @@ import { useState, useEffect, use } from "react";
 import { useSearchParams } from "next/navigation";
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const DEFAULT_FALLBACK_PHONE = "+917777039470";
 
 export default function IntelPage({ params }) {
     const unwrappedParams = use(params);
@@ -20,6 +21,90 @@ export default function IntelPage({ params }) {
     const [engagement, setEngagement] = useState(null);
     const [templates, setTemplates] = useState([]);
     const [selectedTemplate, setSelectedTemplate] = useState("");
+    const [channelSettings, setChannelSettings] = useState(null);
+
+    // Channel agents state (Stage 6/7/8)
+    const [channelDrafts, setChannelDrafts] = useState({ sms: null, whatsapp: null, voice: null });
+    const [channelLoading, setChannelLoading] = useState({ sms: false, whatsapp: false, voice: false });
+    const [channelSending, setChannelSending] = useState({ sms: false, whatsapp: false, voice: false });
+    const [channelEdit, setChannelEdit] = useState({ sms: false, whatsapp: false, voice: false });
+    const [channelEditText, setChannelEditText] = useState({ sms: '', whatsapp: '', voice: '' });
+    const [toast, setToast] = useState(null);
+
+    const showToast = (msg, type = "success") => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
+    // ── Channel Agent Handlers (Stage 6/7/8) ─────────────────────────────────
+    const getAuthHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('access_token'),
+    });
+
+    const loadChannelDraft = async (ch) => {
+        setChannelLoading(p => ({ ...p, [ch]: true }));
+        try {
+            const r = await fetch(`${API}/agents/channel-draft/${id}/${ch}`, { headers: getAuthHeaders() });
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${r.status}`);
+            }
+            const d = await r.json();
+            setChannelDrafts(p => ({ ...p, [ch]: d }));
+            setChannelEditText(p => ({ ...p, [ch]: d.draft || '' }));
+        } catch (e) {
+            console.error(`[ChannelAgent] loadDraft ${ch} failed:`, e);
+            showToast(`Failed to generate ${ch.toUpperCase()} draft: ${e.message}`, "error");
+        } finally {
+            setChannelLoading(p => ({ ...p, [ch]: false }));
+        }
+    };
+
+    const sendChannel = async (ch) => {
+        if (!window.confirm(`Send this ${ch.toUpperCase()} to ${target?.name}?`)) return;
+        setChannelSending(p => ({ ...p, [ch]: true }));
+        try {
+            const draft = channelEditText[ch] || channelDrafts[ch]?.draft;
+            const r = await fetch(`${API}/agents/channel-approve/${id}/${ch}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ draft }),
+            });
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${r.status}`);
+            }
+            setChannelDrafts(p => ({ ...p, [ch]: { ...p[ch], sent: true } }));
+            showToast(`${ch.toUpperCase()} sent successfully and logged to CRM!`);
+        } catch (e) {
+            showToast(`Send failed: ${e.message}`, "error");
+        } finally {
+            setChannelSending(p => ({ ...p, [ch]: false }));
+        }
+    };
+
+    const regenChannel = async (ch) => {
+        setChannelLoading(p => ({ ...p, [ch]: true }));
+        try {
+            const r = await fetch(`${API}/agents/channel-regenerate/${id}/${ch}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
+            if (!r.ok) {
+                const err = await r.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${r.status}`);
+            }
+            const d = await r.json();
+            setChannelDrafts(p => ({ ...p, [ch]: { ...d, sent: false } }));
+            setChannelEditText(p => ({ ...p, [ch]: d.draft }));
+        } catch (e) {
+            showToast(`Regeneration failed: ${e.message}`, "error");
+        } finally {
+            setChannelLoading(p => ({ ...p, [ch]: false }));
+        }
+    };
+
 
     // Live Preview State
     const [rawEditorContent, setRawEditorContent] = useState("");
@@ -44,7 +129,7 @@ export default function IntelPage({ params }) {
 
         } catch (e) {
             console.error("Regeneration failed", e);
-            alert("Regeneration failed: " + e.message);
+            showToast("Regeneration failed: " + e.message, "error");
         } finally {
             setIsRegenerating(false);
         }
@@ -85,7 +170,7 @@ export default function IntelPage({ params }) {
     const handleApproveEmail = async () => {
         if (!target) return;
         if (target.emailSent) {
-            alert("Email was already sent to this lead. Use force send if you need to re-send.");
+            showToast("Email was already sent to this lead. Use force send if you need to re-send.", "error");
             return;
         }
         setIsSending(true);
@@ -121,16 +206,16 @@ export default function IntelPage({ params }) {
             if (res.status === 409) {
                 const err = await res.json();
                 const sentDate = err.detail?.sent_at ? new Date(err.detail.sent_at).toLocaleString() : "earlier";
-                alert(`This email was already sent on ${sentDate}. No duplicate sent.`);
+                showToast(`This email was already sent on ${sentDate}. No duplicate sent.`, "error");
                 window.location.reload();
                 return;
             }
             if (!res.ok) throw new Error("Failed to dispatch email");
-            alert("Email dispatched successfully and logged to CRM!");
+            showToast("Email dispatched successfully and logged to CRM!");
             window.location.reload();
         } catch (e) {
             console.error("Email dispatch failed", e);
-            alert("Delivery failed: " + e.message);
+            showToast("Delivery failed: " + e.message, "error");
         } finally {
             setIsSending(false);
         }
@@ -144,11 +229,11 @@ export default function IntelPage({ params }) {
                 headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` }
             });
             if (!res.ok) throw new Error("Delete failed");
-            alert("Lead deleted successfully.");
+            showToast("Lead deleted successfully.");
             window.location.href = "/ledger";
         } catch (e) {
             console.error(e);
-            alert("Failed to delete lead: " + e.message);
+            showToast("Failed to delete lead: " + e.message, "error");
         }
     };
 
@@ -168,11 +253,13 @@ export default function IntelPage({ params }) {
                 const fullData = {
                     id: data.lead_id,
                     email: data.email || "",
+                    source: data.source || "csv",
                     name: data.profile?.name || "Unknown",
                     title: data.profile?.title || "Unknown",
                     company: data.profile?.company || "Unknown",
                     linkedin: data.profile?.linkedin || "",
                     website: data.profile?.website || "",
+                    phone: data.profile?.phone || "",
                     bio: data.profile?.bio || "",
                     intent: data.agents?.intent?.score || 0,
                     status: data.status || "Ready State",
@@ -198,9 +285,21 @@ export default function IntelPage({ params }) {
                     logs: data.agents?.crm?.logs || [],
                     emailSent: data.email_sent || false,
                     lastSentAt: data.last_sent_at || null,
+                    sdkActivity: data.sdk_activity || null,
+                    agents: data.agents || {},
                 };
                 setTarget(fullData);
                 setLoading(false);
+
+                // Initial channel drafts (Stage 6/7/8) from auto-generation
+                if (data.agents?.channels) {
+                    setChannelDrafts(data.agents.channels);
+                    const initialEditText = {};
+                    Object.keys(data.agents.channels).forEach(ch => {
+                        initialEditText[ch] = data.agents.channels[ch].draft || '';
+                    });
+                    setChannelEditText(p => ({ ...p, ...initialEditText }));
+                }
 
                 // Initialize raw editor content
                 if (!rawEditorContent) {
@@ -240,13 +339,31 @@ export default function IntelPage({ params }) {
             })
             .catch(err => console.error("Failed to fetch templates:", err));
 
-        // Auto-refresh engagement stats every 5 seconds for a "live" feel
+        // Fetch channel settings for SMS/WhatsApp templates
+        fetch(`${API}/channels/settings`, { headers })
+            .then(res => res.json())
+            .then(data => setChannelSettings(data))
+            .catch(err => console.error("Failed to fetch channel settings:", err));
+
+        // Auto-refresh engagement and live logs every 3 seconds for a "live" feel
         const interval = setInterval(() => {
             fetch(`${API}/leads/${id}/email-engagement`, { headers })
                 .then(res => res.json())
                 .then(data => setEngagement(data))
                 .catch(() => { });
-        }, 5000);
+
+            fetch(`${API}/leads/${id}/logs`, { headers })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.logs) {
+                        setTarget(prev => {
+                            if (!prev) return prev;
+                            return { ...prev, logs: data.logs };
+                        });
+                    }
+                })
+                .catch(() => { });
+        }, 3000);
 
         return () => clearInterval(interval);
     }, [id, batchId]);
@@ -298,7 +415,13 @@ export default function IntelPage({ params }) {
                         <section className="grid grid-cols-12 gap-6 items-stretch">
                             {/* Identity Block */}
                             <div className="col-span-12 lg:col-span-8 bg-paper border border-ink p-8 flex flex-col justify-center shadow-premium hover:shadow-premium-hover transition-premium relative group">
-                                <div className="absolute top-0 right-0 bg-ink text-paper px-3 py-1 font-mono text-xs uppercase tracking-widest">Target Acquired</div>
+                                <div className={`absolute top-0 right-0 border-b border-l px-3 py-1 font-mono text-[10px] uppercase tracking-widest font-bold flex items-center gap-2 ${target.source === 'sdk'
+                                        ? 'bg-blue-50/50 text-blue-700 border-blue-200'
+                                        : 'bg-ink text-paper border-ink'
+                                    }`}>
+                                    {target.source === 'sdk' && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>}
+                                    {target.source === 'sdk' ? 'Live Tracked (SDK)' : 'Target Acquired'}
+                                </div>
                                 <div className="flex items-start justify-between">
                                     <div className="flex flex-col gap-1">
                                         <h1 className="font-display font-bold text-5xl uppercase tracking-tighter text-ink">{target.name}</h1>
@@ -386,20 +509,119 @@ export default function IntelPage({ params }) {
                                     <div className="flex flex-col gap-1 md:pl-6 pr-4">
                                         <span className="text-xs text-ink/50 uppercase">First Activity</span>
                                         <span className="text-sm font-bold text-ink">
-                                            {engagement.first_opened_at || engagement.first_clicked_at 
-                                                ? new Date(engagement.first_opened_at || engagement.first_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                                            {engagement.first_opened_at || engagement.first_clicked_at
+                                                ? new Date(engagement.first_opened_at || engagement.first_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                                                 : "—"}
                                         </span>
                                     </div>
                                     <div className="flex flex-col gap-1 md:pl-6">
                                         <span className="text-xs text-ink/50 uppercase">Last Activity</span>
                                         <span className="text-sm font-bold text-ink">
-                                            {engagement.last_opened_at || engagement.last_clicked_at 
-                                                ? new Date(engagement.last_opened_at || engagement.last_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+                                            {engagement.last_opened_at || engagement.last_clicked_at
+                                                ? new Date(engagement.last_opened_at || engagement.last_clicked_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                                                 : "—"}
                                         </span>
                                     </div>
                                 </div>
+                            </section>
+                        )}
+
+                        {/* SDK Behavioral Panel — shown for SDK-sourced leads */}
+                        {target.source === 'sdk' && target.sdkActivity && (
+                            <section className="border border-blue-200 bg-blue-50/30 p-6 relative">
+                                <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 font-mono text-xs uppercase tracking-widest border-b border-l border-blue-600">
+                                    ⚡ SDK Behavioral Data
+                                </div>
+                                <div className="flex items-center gap-2 mb-5">
+                                    <span className="material-symbols-outlined text-blue-600">monitoring</span>
+                                    <h3 className="font-display font-bold text-lg uppercase tracking-wide">Visitor Behavioral Profile</h3>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 font-mono">
+                                    {/* Engagement Score */}
+                                    <div className="col-span-2 flex flex-col gap-1">
+                                        <span className="text-xs text-ink/50 uppercase">Engagement Score</span>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-3xl font-bold ${(target.sdkActivity.engagement_score || 0) >= 70 ? 'text-green-600'
+                                                    : (target.sdkActivity.engagement_score || 0) >= 40 ? 'text-yellow-600'
+                                                        : 'text-red-500'
+                                                }`}>{target.sdkActivity.engagement_score ?? 0}</span>
+                                            <span className="text-sm text-ink/40">/100</span>
+                                        </div>
+                                        <div className="h-2 bg-ink/10 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${(target.sdkActivity.engagement_score || 0) >= 70 ? 'bg-green-500'
+                                                        : (target.sdkActivity.engagement_score || 0) >= 40 ? 'bg-yellow-400'
+                                                            : 'bg-red-400'
+                                                    }`}
+                                                style={{ width: `${target.sdkActivity.engagement_score || 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                    {/* Stats */}
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-xs text-ink/50 uppercase">Pages Viewed</span>
+                                        <span className="text-2xl font-bold">{target.sdkActivity.page_views ?? 0}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-xs text-ink/50 uppercase">Time on Site</span>
+                                        <span className="text-2xl font-bold">
+                                            {target.sdkActivity.total_time_sec
+                                                ? target.sdkActivity.total_time_sec < 60
+                                                    ? `${target.sdkActivity.total_time_sec}s`
+                                                    : `${Math.floor(target.sdkActivity.total_time_sec / 60)}m`
+                                                : '0s'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-xs text-ink/50 uppercase">Max Scroll</span>
+                                        <span className="text-2xl font-bold">{target.sdkActivity.max_scroll ?? 0}%</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-xs text-ink/50 uppercase">Sessions</span>
+                                        <span className="text-2xl font-bold">{target.sdkActivity.sessions_count ?? 1}</span>
+                                    </div>
+                                </div>
+                                {/* Intent signals row */}
+                                <div className="mt-4 flex flex-wrap gap-2 items-center">
+                                    {target.sdkActivity.cart_added && (
+                                        <span className="px-2 py-1 bg-orange-100 text-orange-700 border-2 border-orange-300 font-mono text-xs font-bold">🛒 Visited Cart</span>
+                                    )}
+                                    {target.sdkActivity.checkout_started && (
+                                        <span className="px-2 py-1 bg-red-100 text-red-700 border-2 border-red-300 font-mono text-xs font-bold">💳 Checkout Started</span>
+                                    )}
+                                    {target.sdkActivity.purchase_made && (
+                                        <span className="px-2 py-1 bg-green-100 text-green-700 border-2 border-green-300 font-mono text-xs font-bold">🎉 Purchase Made</span>
+                                    )}
+                                    {target.sdkActivity.utm_source && (
+                                        <span className="px-2 py-1 bg-purple-50 text-purple-700 border-2 border-purple-200 font-mono text-xs">via {target.sdkActivity.utm_source}{target.sdkActivity.utm_campaign ? ` / ${target.sdkActivity.utm_campaign}` : ''}</span>
+                                    )}
+                                    {target.sdkActivity.device_type && (
+                                        <span className="px-2 py-1 bg-ink/5 border-2 border-ink/10 font-mono text-xs">
+                                            {target.sdkActivity.device_type === 'mobile' ? '📱' : target.sdkActivity.device_type === 'tablet' ? '📲' : '🖥'} {target.sdkActivity.device_type}
+                                        </span>
+                                    )}
+                                </div>
+                                {/* Pages visited list */}
+                                {target.sdkActivity.urls && target.sdkActivity.urls.length > 0 && (
+                                    <div className="mt-4">
+                                        <p className="font-mono text-[10px] uppercase text-ink/40 mb-2 font-bold tracking-widest">Pages Visited</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {target.sdkActivity.urls.slice(0, 8).map((url, i) => (
+                                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                                    className="text-[10px] font-mono px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 transition-colors truncate max-w-[200px]"
+                                                    title={url}
+                                                >
+                                                    {url.replace(/^https?:\/\/[^/]+/, '') || '/'}
+                                                </a>
+                                            ))}
+                                            {target.sdkActivity.urls.length > 8 && (
+                                                <span className="text-[10px] font-mono px-2 py-0.5 bg-ink/5 border border-ink/10 text-ink/50">
+                                                    +{target.sdkActivity.urls.length - 8} more
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </section>
                         )}
 
@@ -659,7 +881,7 @@ export default function IntelPage({ params }) {
                                                                 const parsed = new URL(targetUrl);
                                                                 const realUrl = parsed.searchParams.get('url');
                                                                 if (realUrl) targetUrl = realUrl;
-                                                            } catch (_) {}
+                                                            } catch (_) { }
                                                             window.open(targetUrl, '_blank', 'noopener,noreferrer');
                                                         }
                                                     }}
@@ -778,6 +1000,266 @@ export default function IntelPage({ params }) {
                             </div>
                         </section>
 
+                        {/* ══ CHANNEL AGENTS 6/7/8 ═══════════════════════════════════════════ */}
+                        {[
+                            { id: 'sms', label: 'SMS Outreach Agent', stage: 6, icon: 'sms', color: 'emerald' },
+                            { id: 'whatsapp', label: 'WhatsApp Agent', stage: 7, icon: 'chat', color: 'teal' },
+                            { id: 'voice', label: 'AI Voice Call Agent', stage: 8, icon: 'record_voice_over', color: 'blue' },
+                        ].map(cfg => {
+                            const data = channelDrafts[cfg.id];
+                            const isLoading = channelLoading[cfg.id];
+                            const isSend = channelSending[cfg.id];
+                            const isEditing = channelEdit[cfg.id];
+                            const colorMap = {
+                                emerald: { border: 'border-emerald-400', bg: 'bg-emerald-50', text: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700 border-emerald-300', btn: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
+                                teal: { border: 'border-teal-400', bg: 'bg-teal-50', text: 'text-teal-700', badge: 'bg-teal-100 text-teal-700 border-teal-300', btn: 'bg-teal-500 hover:bg-teal-600 text-white' },
+                                blue: { border: 'border-blue-400', bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-700 border-blue-300', btn: 'bg-blue-500 hover:bg-blue-600 text-white' },
+                            };
+                            const c = colorMap[cfg.color];
+
+                            return (
+                                <section key={cfg.id} className="border border-ink bg-paper mt-6 shadow-premium hover:shadow-premium-hover transition-premium overflow-hidden">
+                                    <div className={'p-4 border-b border-ink flex justify-between items-center ' + c.bg}>
+                                        <div className="flex items-center gap-3">
+                                            <span className={'material-symbols-outlined ' + c.text}>{cfg.icon}</span>
+                                            <h3 className="font-display font-bold text-sm tracking-wide uppercase">
+                                                {`AGENT_0${cfg.stage}: ${cfg.label.toUpperCase()}`}
+                                            </h3>
+
+                                            {data?.sent && (
+                                                <span className={'px-2 py-0.5 text-[10px] font-bold uppercase border rounded-sm ' + c.badge}>SENT</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {!data && !isLoading && (
+                                                <button onClick={() => loadChannelDraft(cfg.id)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-ink text-paper text-xs font-bold uppercase tracking-widest hover:bg-primary hover:text-ink transition-colors"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                                                    Generate AI Draft
+                                                </button>
+                                            )}
+                                            {data && (
+                                                <button onClick={() => regenChannel(cfg.id)} disabled={isLoading}
+                                                    className="flex items-center gap-1 px-3 py-1.5 border border-ink text-xs font-bold uppercase hover:bg-mute transition-colors disabled:opacity-40"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">refresh</span>
+                                                    Regenerate
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6">
+                                        {isLoading ? (
+                                            <div className="flex items-center gap-3 py-6">
+                                                <span className="material-symbols-outlined animate-spin text-ink/40">hourglass_top</span>
+                                                <span className="font-mono text-xs text-ink/40 uppercase tracking-widest animate-pulse">
+                                                    Ollama generating personalized {cfg.label} using behavioral data...
+                                                </span>
+                                            </div>
+                                        ) : !data ? (
+                                            <div className="flex flex-col items-center gap-3 py-10">
+                                                <span className={'material-symbols-outlined text-4xl text-ink/20'}>{cfg.icon}</span>
+                                                <p className="text-xs text-ink/40 uppercase tracking-widest font-mono">Click Generate to run the {cfg.label}</p>
+                                                <p className="text-[10px] text-ink/30 font-mono">
+                                                    Uses intent score · page visits · scroll depth · cart signals · UTM source
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-4">
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="font-mono text-[10px] uppercase tracking-widest text-ink/50">AI-Generated Draft (Ollama)</span>
+                                                        {!data.sent && (
+                                                            <button onClick={() => setChannelEdit(p => ({ ...p, [cfg.id]: !p[cfg.id] }))}
+                                                                className="text-[10px] font-bold uppercase tracking-widest text-ink/50 hover:text-ink flex items-center gap-1"
+                                                            >
+                                                                <span className="material-symbols-outlined text-sm">{isEditing ? 'check' : 'edit'}</span>
+                                                                {isEditing ? 'Done' : 'Edit'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {isEditing && !data.sent ? (
+                                                        <>
+                                                            <textarea
+                                                                value={channelEditText[cfg.id]}
+                                                                onChange={e => setChannelEditText(p => ({ ...p, [cfg.id]: e.target.value }))}
+                                                                rows={cfg.id === 'voice' ? 8 : 4}
+                                                                className={'w-full px-4 py-3 border-2 ' + c.border + ' font-mono text-sm leading-relaxed focus:outline-none bg-white/60 resize-none'}
+                                                            />
+                                                            {cfg.id === 'sms' && (
+                                                                <p className={'text-right text-[10px] mt-1 font-bold ' + ((channelEditText.sms?.length || 0) > 160 ? 'text-red-500' : 'text-ink/40')}>
+                                                                    {channelEditText.sms?.length || 0}/160
+                                                                </p>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <div className={'px-4 py-4 border-l-4 ' + c.border + ' ' + c.bg + ' font-mono text-sm leading-relaxed whitespace-pre-wrap'}>
+                                                            {(() => {
+                                                                const draftText = channelEditText[cfg.id] || data.draft;
+                                                                const templateBlocks = channelSettings?.[`${cfg.id}_template_blocks`];
+
+                                                                if (!templateBlocks || templateBlocks.length === 0) {
+                                                                    return draftText; // Fallback to raw text if no blocks
+                                                                }
+
+                                                                return (
+                                                                    <div className="flex flex-col gap-3 font-sans text-base">
+                                                                        {templateBlocks.map((blk, i) => {
+                                                                            const renderText = (t) => {
+                                                                                if (!t) return '';
+                                                                                return t.replace(/\{\{customer_name\}\}/g, target?.name?.split(' ')[0] || 'there')
+                                                                                    .replace(/\{\{customer_company\}\}/g, target?.company || '')
+                                                                                    .replace(/\{\{sender_name\}\}/g, 'Our Team')
+                                                                                    .replace(/\{\{page_link\}\}/g, data?.page_link || '#');
+                                                                            };
+
+                                                                            if (blk.type === 'ai_msg') {
+                                                                                return <div key={i} className="whitespace-pre-wrap">{draftText}</div>;
+                                                                            }
+                                                                            if (blk.type === 'greeting') {
+                                                                                return <div key={i} className="font-semibold">{renderText(blk.text)}</div>;
+                                                                            }
+                                                                            if (blk.type === 'text') {
+                                                                                return <div key={i} className="whitespace-pre-wrap">{renderText(blk.text)}</div>;
+                                                                            }
+                                                                            if (blk.type === 'image_url' && blk.url) {
+                                                                                // eslint-disable-next-line @next/next/no-img-element
+                                                                                return <div key={i} className="flex flex-col gap-1">
+                                                                                    <img src={blk.url} alt="Attached" className="w-full max-w-sm rounded" />
+                                                                                    {blk.caption && <span className="text-xs text-ink/50 italic">{renderText(blk.caption)}</span>}
+                                                                                </div>;
+                                                                            }
+                                                                            if (blk.type === 'cta_link') {
+                                                                                return <div key={i}>
+                                                                                    <a href={renderText(blk.url)} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all">
+                                                                                        {renderText(blk.label) || renderText(blk.url)}
+                                                                                    </a>
+                                                                                </div>;
+                                                                            }
+                                                                            if (blk.type === 'divider') {
+                                                                                return <div key={i} className="border-t border-ink/20 my-2"></div>;
+                                                                            }
+                                                                            if (blk.type === 'signature') {
+                                                                                return <div key={i} className="text-ink/60 text-sm whitespace-pre-wrap italic">{renderText(blk.text)}</div>;
+                                                                            }
+                                                                            return null;
+                                                                        })}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {(() => {
+                                                    const masterMedia = (target?.agents?.scraped_media || []).filter(m => m.image);
+                                                    const draftMedia = (data?.scraped_media || []).filter(m => m.image);
+                                                    let displayMedia = [];
+
+                                                    if (masterMedia.length > 0) displayMedia = masterMedia;
+                                                    else if (draftMedia.length > 0) displayMedia = draftMedia;
+                                                    else if (data.image_url && typeof data.image_url === 'string') {
+                                                        displayMedia = [{ image: data.image_url, url: data.page_link, name: 'Product' }];
+                                                    }
+
+                                                    if (displayMedia.length === 0) return null;
+
+                                                    return (
+                                                        <div className="mt-4 flex flex-col gap-3">
+                                                            <span className="font-mono text-[10px] uppercase font-bold tracking-widest text-ink/50">Attached Media & Product Catalog</span>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                {displayMedia.map((m, idx) => (
+                                                                    <div key={idx} className="p-3 border border-ink/10 bg-white/50 flex gap-3 items-center rounded-sm hover:shadow-sm transition-all group">
+                                                                        <div className="w-12 h-12 shrink-0 border border-ink/5 overflow-hidden bg-white rounded-sm">
+                                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                                            <img src={m.image} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="font-mono text-[10px] font-bold text-ink truncate mb-0.5">{m.name || 'View Item'}</p>
+                                                                            <a href={m.url} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-primary hover:underline truncate block">
+                                                                                {m.url?.replace('https://', '').replace('http://', '')}
+                                                                            </a>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <p className="font-mono text-[9px] text-ink/40 mt-1 italic">
+                                                                * These tracked elements will be bundled with the base text in the final dispatch.
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {cfg.id === 'voice' && target?.logs?.some(l => l.agent === 'VOICE_AGENT_LIVE') && (
+                                                    <details className="mt-6 flex flex-col group">
+                                                        <summary className="flex items-center gap-2 cursor-pointer list-none outline-none w-max select-none">
+                                                            <span className="w-2 h-2 rounded-full bg-data-green animate-pulse"></span>
+                                                            <span className="font-mono text-[10px] uppercase font-bold tracking-widest text-data-green hover:underline">
+                                                                Live Conversation Transcript
+                                                            </span>
+                                                            <span className="material-symbols-outlined text-sm text-data-green group-open:rotate-180 transition-transform">expand_more</span>
+                                                        </summary>
+                                                        <div className="flex flex-col gap-2 p-4 bg-ink text-paper font-mono text-xs rounded-sm max-h-[400px] overflow-y-auto shadow-inner mt-3">
+                                                            {target.logs.filter(l => l.agent === 'VOICE_AGENT_LIVE').map((log, idx) => {
+                                                                const isCustomer = log.action.startsWith('Customer said:');
+                                                                const text = log.action.replace('Customer said: "', '').replace('AI responded: "', '').replace(/"$/, '');
+                                                                return (
+                                                                    <div key={idx} className={`flex flex-col gap-1 w-full ${isCustomer ? 'items-end' : 'items-start'}`}>
+                                                                        <span className="text-[9px] text-paper/40">{log.time} · {isCustomer ? 'CUSTOMER' : 'AI'}</span>
+                                                                        <div className={`px-3 py-2 max-w-[80%] rounded shadow-sm ${isCustomer ? 'bg-primary text-ink' : 'bg-paper/10 text-paper border border-paper/20'}`}>
+                                                                            {text}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </details>
+                                                )}
+
+                                                <div className="flex flex-wrap gap-3 font-mono text-[10px] text-ink/50">
+                                                    {cfg.id === 'sms' && <span>Length: {(channelEditText.sms || data.draft || '').length}/160 chars</span>}
+                                                    {cfg.id === 'whatsapp' && <span>WhatsApp Business API · Conversational · Behavioral</span>}
+                                                    {cfg.id === 'voice' && <span>Twilio · Polly.Joanna · ~30 sec · Behavioral script</span>}
+                                                    {data.sent && data.sent_at && <span>Sent: {new Date(data.sent_at).toLocaleString()}</span>}
+                                                </div>
+
+                                                {!data.sent ? (
+                                                    <div className="flex items-center gap-3 pt-2 border-t border-ink/10">
+                                                        <button onClick={() => sendChannel(cfg.id)} disabled={isSend}
+                                                            className={'flex items-center gap-2 px-6 py-2.5 font-display font-bold text-sm transition-premium disabled:opacity-50 ' + c.btn}
+                                                        >
+                                                            <span className="material-symbols-outlined text-lg">
+                                                                {isSend ? 'hourglass_empty' : cfg.id === 'voice' ? 'call' : 'send'}
+                                                            </span>
+                                                            {isSend ? 'SENDING...' : 'APPROVE & SEND'}
+                                                        </button>
+                                                        <span className="text-[10px] text-ink/40 font-mono">Sends to lead&apos;s phone · logs to CRM audit trail</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-between pt-2 border-t border-ink/10">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="material-symbols-outlined text-emerald-500 text-sm">check_circle</span>
+                                                            <span className="font-mono text-xs text-emerald-600 font-bold uppercase tracking-widest">Sent & Logged to CRM</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => sendChannel(cfg.id)}
+                                                            disabled={isSend}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-mute hover:bg-ink hover:text-paper font-mono text-[10px] font-bold uppercase tracking-widest border border-ink/20 transition-all disabled:opacity-50"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">{isSend ? 'hourglass_empty' : 'refresh'}</span>
+                                                            {isSend ? 'RE-SENDING...' : 'RESEND'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+                            );
+                        })}
+
                         {/* Footer: Audit Trail (Agent 5) */}
                         <section className="border border-ink bg-paper mt-8 shadow-premium hover:shadow-premium-hover transition-premium overflow-hidden mb-12">
                             <details className="group" open>
@@ -824,6 +1306,26 @@ export default function IntelPage({ params }) {
                     </div>
                 </div>
             </div>
+            {toast && (
+                <div
+                    className={`fixed top-6 right-6 z-50 px-5 py-3 border-2 border-ink font-mono text-xs uppercase
+                              flex flex-col gap-2 shadow-[6px_6px_0px_0px_rgba(10,10,10,1)]
+                              transition-all animate-in slide-in-from-top-2
+                              ${toast.type === "error"
+                                ? "bg-red-50 border-red-500 text-red-700"
+                                : "bg-[#f93706] text-black"}`}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px]">
+                            {toast.type === "error" ? "error" : "check_circle"}
+                        </span>
+                        <span className="font-bold">{toast.msg}</span>
+                    </div>
+                    <div className="h-1 bg-black/20 w-full overflow-hidden">
+                        <div className="h-full bg-black animate-progress-shrink" />
+                    </div>
+                </div>
+            )}
         </DashboardLayout>
     );
 }

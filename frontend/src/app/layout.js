@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-    title: "LeadMind // Command Center",
+    title: "LeadMind",
     description: "Multi-Agent Sales Intelligence Dashboard",
 };
 

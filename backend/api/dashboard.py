@@ -13,20 +13,25 @@ router = APIRouter()
 @router.get("/stats")
 async def dashboard_stats(user = Depends(get_current_user)):
     """Get KPI card data for the dashboard."""
-    company_id = user["company_id"]
+    from db import tracking_events_collection, leads_collection, email_logs_collection, agent_activity_collection
+    from datetime import datetime, timedelta, timezone
+    company_id_obj = user["company_id"]
+    company_id_str = str(user["company_id"])
+    company_query = {"$in": [company_id_obj, company_id_str]}
+    
     # 1. Total Leads
-    total_leads = await leads_collection.count_documents({"company_id": company_id})
+    total_leads = await leads_collection.count_documents({"company_id": company_query})
     
     # 2. High Intent Leads
-    high_intent = await leads_collection.count_documents({"company_id": company_id, "intel.intent_score": {"$gte": 80}})
+    high_intent = await leads_collection.count_documents({"company_id": company_query, "intel.intent_score": {"$gte": 80}})
     
     # 3. Conversion Rate
-    converted_leads = await leads_collection.count_documents({"company_id": company_id, "status": "converted"})
+    converted_leads = await leads_collection.count_documents({"company_id": company_query, "status": "converted"})
     conversion_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
     
-    # 3. Pipeline Value
+    # 4. Pipeline Value
     pipeline_cursor = leads_collection.aggregate([
-        {"$match": {"company_id": company_id}},
+        {"$match": {"company_id": company_query}},
         {"$group": {"_id": None, "total_value": {"$sum": {"$toDouble": {"$ifNull": ["$crm.deal_value", 0]}}}}}
     ])
     pipeline_res = await pipeline_cursor.to_list(1)
@@ -34,17 +39,24 @@ async def dashboard_stats(user = Depends(get_current_user)):
     
     # 5. Average Score
     score_cursor = leads_collection.aggregate([
-        {"$match": {"company_id": company_id}},
+        {"$match": {"company_id": company_query}},
         {"$group": {"_id": None, "avg_score": {"$avg": {"$toDouble": {"$ifNull": ["$intel.intent_score", 0]}}}}}
     ])
     score_res = await score_cursor.to_list(1)
     avg_score = round(score_res[0]["avg_score"]) if score_res else 0
     
     # 6. Emails Sent
-    emails_sent = await email_logs_collection.count_documents({"company_id": company_id})
+    emails_sent = await email_logs_collection.count_documents({"company_id": company_query})
     
     # 7. Response Rate (mocked for now since IMAP parsing isn't wired)
     response_rate = random.randint(12, 45) if emails_sent > 0 else 0
+    
+    # 8. Live Visitors (Active in last 30 minutes)
+    thirty_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=30)
+    live_visitors = len(await tracking_events_collection.distinct("visitor_id", {
+        "company_id": company_query,
+        "timestamp": {"$gte": thirty_mins_ago}
+    }))
     
     return {
         "total_leads": total_leads,
@@ -55,14 +67,17 @@ async def dashboard_stats(user = Depends(get_current_user)):
         "active_agents": 5,
         "emails_sent": emails_sent,
         "response_rate": response_rate,
+        "live_visitors": live_visitors,
     }
 
 @router.get("/activity")
 async def dashboard_activity(user = Depends(get_current_user)):
     """Get recent agent activity feed."""
-    company_id = user["company_id"]
+    company_id_obj = user["company_id"]
+    company_id_str = str(user["company_id"])
+    company_query = {"$in": [company_id_obj, company_id_str]}
     
-    cursor = agent_activity_collection.find({"company_id": company_id}).sort("timestamp", -1).limit(20)
+    cursor = agent_activity_collection.find({"company_id": company_query}).sort("timestamp", -1).limit(20)
     docs = await cursor.to_list(length=20)
     
     activities = []
@@ -93,10 +108,12 @@ async def dashboard_activity(user = Depends(get_current_user)):
 @router.get("/pipeline")
 async def dashboard_pipeline(user = Depends(get_current_user)):
     """Get sales pipeline breakdown."""
-    company_id = user["company_id"]
+    company_id_obj = user["company_id"]
+    company_id_str = str(user["company_id"])
+    company_query = {"$in": [company_id_obj, company_id_str]}
     
     cursor = leads_collection.aggregate([
-        {"$match": {"company_id": company_id, "crm.stage": {"$ne": None}}},
+        {"$match": {"company_id": company_query, "crm.stage": {"$ne": None}}},
         {"$group": {
             "_id": "$crm.stage",
             "count": {"$sum": 1},
@@ -122,9 +139,11 @@ async def dashboard_pipeline(user = Depends(get_current_user)):
 @router.get("/priority-targets")
 async def priority_targets(user = Depends(get_current_user)):
     """Get top priority leads for the dashboard."""
-    company_id = user["company_id"]
+    company_id_obj = user["company_id"]
+    company_id_str = str(user["company_id"])
+    company_query = {"$in": [company_id_obj, company_id_str]}
     
-    cursor = leads_collection.find({"company_id": company_id}).sort("intel.intent_score", -1).limit(6)
+    cursor = leads_collection.find({"company_id": company_query}).sort("intel.intent_score", -1).limit(6)
     docs = await cursor.to_list(6)
     
     targets = []

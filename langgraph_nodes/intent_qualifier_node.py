@@ -171,7 +171,7 @@ def calculate_deal_value(state):
     deal_value = round(base * i_mult * s_mult, 2)
     crm_stage  = stage.lower().strip() if stage else "prospect"
 
-    print(f"  [DealValue] title={title!r} score={score} stage={stage} → ${deal_value:,.2f}")
+    print(f"  [DealValue] title={title!r} score={score} stage={stage} -> ${deal_value:,.2f}")
 
     return {
         **state,

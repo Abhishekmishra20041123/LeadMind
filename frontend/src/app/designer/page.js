@@ -217,7 +217,7 @@ function ImageInput({ label, src, mode, onSrcChange, onModeChange }) {
             onSrcChange(data.url);
         } catch (err) {
             console.error(err);
-            alert("Image upload failed. Please try again or use a URL.");
+            showToast("Image upload failed. Please try again or use a URL.", "error");
         } finally {
             setIsUploading(false);
         }
@@ -584,7 +584,7 @@ const DEFAULT_GLOBAL_STYLES = {
     spacing: "normal",
 };
 
-export default function EmailDesigner() {
+function EmailDesignerTab() {
     const [blocks, setBlocks] = useState([]);
     const [selectedId, setSelectedId] = useState(null);
     const [gs, setGs] = useState(DEFAULT_GLOBAL_STYLES);
@@ -710,11 +710,24 @@ export default function EmailDesigner() {
     const previewHTML = renderEmailHTML(blocks, gs, true);
 
     return (
-        <DashboardLayout>
+        <div className="flex flex-col h-full bg-paper">
             {/* ── Toast ── */}
             {toast && (
-                <div className={`fixed bottom-6 right-6 z-[70] px-5 py-3 border border-ink font-mono text-sm shadow-lg transition-all ${toast.type === "error" ? "bg-red-50 text-red-700" : "bg-paper text-ink"}`}>
-                    {toast.msg}
+                <div
+                    className={`fixed top-6 right-6 z-[70] px-5 py-3 border-2 border-ink font-mono text-xs uppercase
+                              flex flex-col gap-2 shadow-[6px_6px_0px_0px_rgba(10,10,10,1)]
+                              transition-all animate-in slide-in-from-top-2
+                              ${toast.type === "error" ? "bg-red-50 text-red-700" : "bg-[#f93706] text-black"}`}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px]">
+                            {toast.type === "error" ? "error" : "check_circle"}
+                        </span>
+                        <span className="font-bold">{toast.msg}</span>
+                    </div>
+                    <div className="h-1 bg-black/20 w-full overflow-hidden">
+                        <div className="h-full bg-black animate-progress-shrink" />
+                    </div>
                 </div>
             )}
 
@@ -768,13 +781,13 @@ export default function EmailDesigner() {
                 </div>
             )}
 
-            {/* ── Page Header ── */}
-            <div className="bg-paper border-b border-ink px-8 py-5 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0">
-                <div>
-                    <h2 className="font-display text-3xl font-bold uppercase tracking-tighter leading-none mb-0.5">Email Designer</h2>
-                    <p className="font-mono text-xs text-ink/50">
-                        {currentTplId ? `Editing: ${templateName}` : "Design a reusable email template"}
-                    </p>
+            {/* ── Toolbar ── */}
+            <div className="bg-mute border-b-2 border-ink px-8 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[20px]">design_services</span>
+                    <span className="font-mono text-xs font-bold uppercase tracking-widest text-ink">
+                        {currentTplId ? `Editing: ${templateName}` : "Create New Email Template"}
+                    </span>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     {/* Load Template */}
@@ -964,6 +977,642 @@ export default function EmailDesigner() {
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Channel Wrapper
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function MultiChannelDesigner() {
+    const [tab, setTab] = useState("email");
+
+    return (
+        <DashboardLayout>
+            {/* Top Bar Tabs */}
+            <div className="bg-paper border-b-2 border-ink px-8 py-4 flex items-center justify-between shrink-0 z-50">
+                <h2 className="font-display text-3xl font-bold uppercase tracking-tighter mb-0 flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-[28px]">token</span>
+                    Designer Studio
+                </h2>
+                <div className="flex bg-mute border-2 border-ink p-1">
+                    {["email", "sms", "whatsapp"].map(ch => (
+                        <button key={ch} onClick={() => setTab(ch)}
+                            className={`font-mono text-xs font-bold uppercase px-6 py-2 transition-all ${
+                                tab === ch
+                                ? "bg-ink text-primary-content border-2 border-ink shadow-[2px_2px_0px_0px_rgba(10,10,10,1)] text-[#00E599]" 
+                                : "text-ink border-2 border-transparent hover:bg-paper"
+                            }`}>
+                            {ch === "email" ? "Email" : ch === "sms" ? "SMS (Text)" : "WhatsApp"}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Canvas Area */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+                <div className={`absolute inset-0 transition-opacity duration-300 ${tab === "email" ? "opacity-100 z-10" : "opacity-0 -z-10 pointer-events-none"}`}>
+                    <EmailDesignerTab />
+                </div>
+                {tab === "sms" && (
+                    <div className="absolute inset-0 z-10 bg-paper">
+                        <PlainChannelDesigner channel="sms" title="SMS Agent Prompt Engine" icon="sms" />
+                    </div>
+                )}
+                {tab === "whatsapp" && (
+                    <div className="absolute inset-0 z-10 bg-paper">
+                        <PlainChannelDesigner channel="whatsapp" title="WhatsApp Agent Prompt Engine" icon="chat" />
+                    </div>
+                )}
+            </div>
         </DashboardLayout>
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Channel Message Block Designer (SMS / WhatsApp)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CHANNEL_BLOCK_PALETTE = [
+    { type: "greeting",   icon: "waving_hand",       label: "Greeting"     },
+    { type: "image_url",  icon: "image",             label: "Media / Image"},
+    { type: "ai_msg",     icon: "auto_awesome",      label: "AI Message"   },
+    { type: "text",       icon: "text_fields",       label: "Text Block"   },
+    { type: "cta_link",   icon: "link",              label: "CTA Link"     },
+    { type: "divider",    icon: "horizontal_rule",   label: "Divider"      },
+    { type: "signature",  icon: "signature",         label: "Signature"    },
+];
+
+const CHANNEL_BLOCK_DEFAULTS = {
+    greeting:  { text: "Hey {{customer_name}}," },
+    image_url: { url: "", caption: "" },
+    ai_msg:    { placeholder: true },
+    text:      { text: "We help companies like {{customer_company}} grow faster." },
+    cta_link:  { label: "See how it works →", url: "{{page_link}}" },
+    divider:   {},
+    signature: { text: "Best,\n{{sender_name}}" },
+};
+
+const CHANNEL_SAMPLE_VALS = {
+    customer_name:    "Alex Johnson",
+    customer_company: "TechVision Corp",
+    sender_name:      "Sarah Mitchell",
+    page_link:        "https://yourproduct.io/demo",
+};
+
+function fillSample(str = "") {
+    return str.replace(/\{\{(\w+)\}\}/g, (_, k) => CHANNEL_SAMPLE_VALS[k] ?? `{{${k}}}`);
+}
+
+// Render one block to plain text for the preview
+function renderChannelBlock(block, aiSample) {
+    switch (block.type) {
+        case "greeting":  return fillSample(block.text || "Hey {{customer_name}},");
+        case "image_url": return block.url ? `📷 ${fillSample(block.url)}${block.caption ? `\n${fillSample(block.caption)}` : ""}` : "[Image URL not set]";
+        case "ai_msg":    return aiSample;
+        case "text":      return fillSample(block.text || "");
+        case "cta_link":  return `${fillSample(block.label || "Click here")} ${fillSample(block.url || "")}`;
+        case "divider":   return "───────────────";
+        case "signature": return fillSample(block.text || "Best,\n{{sender_name}}");
+        default:          return "";
+    }
+}
+
+// Build the prompt text from blocks (to save)
+function buildPromptFromBlocks(blocks) {
+    return blocks.map(b => {
+        switch (b.type) {
+            case "greeting":  return b.text || "Hey {{customer_name}},";
+            case "image_url": return b.url ? `${b.url}${b.caption ? `\n${b.caption}` : ""}` : "";
+            case "ai_msg":    return "{{ai_msg}}";
+            case "text":      return b.text || "";
+            case "cta_link":  return `${b.label || "Click here"}: ${b.url || "{{page_link}}"}`;
+            case "divider":   return "---";
+            case "signature": return b.text || "Best,\n{{sender_name}}";
+            default:          return "";
+        }
+    }).filter(Boolean).join("\n\n");
+}
+
+function ChannelBlockProperties({ block, onChange }) {
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState(null);
+    const [dragOver, setDragOver] = useState(false);
+    const fileRef = useRef(null);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+
+    const handleUpload = async (file) => {
+        if (!file || !file.type.startsWith("image/")) {
+            setUploadError("Please select an image file (JPG, PNG, GIF, WebP).");
+            return;
+        }
+        setUploading(true);
+        setUploadError(null);
+        try {
+            const form = new FormData();
+            form.append("file", file);
+            const res = await fetch(`${API}/templates/upload`, {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                body: form,
+            });
+            if (res.ok) {
+                const data = await res.json();
+                onChange({ ...block, url: data.url });
+            } else {
+                const err = await res.json().catch(() => ({}));
+                setUploadError(err.detail || "Upload failed. Try again.");
+            }
+        } catch (e) {
+            setUploadError("Network error during upload.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const onDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleUpload(file);
+    };
+
+    if (!block) return (
+        <div className="flex flex-col items-center justify-center text-center h-full opacity-40 py-8">
+            <span className="material-symbols-outlined text-[40px] mb-3">touch_app</span>
+            <p className="font-mono text-xs">Click a block on the canvas to edit its properties</p>
+        </div>
+    );
+
+    const field = (label, key, type = "text", placeholder = "") => (
+        <div className="mb-3">
+            <div className="font-mono text-[10px] text-ink/50 uppercase mb-1">{label}</div>
+            {type === "textarea" ? (
+                <textarea value={block[key] || ""} onChange={e => onChange({ ...block, [key]: e.target.value })}
+                    rows={4} placeholder={placeholder}
+                    className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper focus:outline-none resize-none" />
+            ) : (
+                <input type={type} value={block[key] || ""} onChange={e => onChange({ ...block, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    className="w-full font-mono text-xs border border-ink px-2 py-1.5 bg-paper focus:outline-none" />
+            )}
+        </div>
+    );
+
+    return (
+        <div>
+            <div className="font-mono text-[10px] text-ink/40 uppercase mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[13px]">
+                    {CHANNEL_BLOCK_PALETTE.find(p => p.type === block.type)?.icon || "edit"}
+                </span>
+                {block.type.replace("_", " ").toUpperCase()} Block
+            </div>
+            {block.type === "greeting"  && field("Greeting Text", "text", "textarea", "Hey {{customer_name}},")}
+            {block.type === "text"      && field("Message Text", "text", "textarea", "Your message here…")}
+            {block.type === "signature" && field("Signature Text", "text", "textarea", "Best,\n{{sender_name}}")}
+
+            {block.type === "image_url" && (<>
+                {/* ── Upload Section ── */}
+                <div className="mb-3">
+                    <div className="font-mono text-[10px] text-ink/50 uppercase mb-2">Upload Image</div>
+
+                    {/* Dropzone */}
+                    <div
+                        onClick={() => !uploading && fileRef.current?.click()}
+                        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={onDrop}
+                        className={`relative border-2 border-dashed cursor-pointer transition-all flex flex-col items-center justify-center text-center p-4 ${
+                            dragOver ? "border-primary bg-primary/5" : "border-ink/30 hover:border-ink hover:bg-mute"
+                        } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                        style={{ minHeight: 100 }}
+                    >
+                        {uploading ? (
+                            <>
+                                <span className="material-symbols-outlined text-[28px] text-primary animate-spin mb-2">autorenew</span>
+                                <span className="font-mono text-[10px] text-ink/60">Uploading to cloud…</span>
+                            </>
+                        ) : block.url ? (
+                            <>
+                                {/* Preview thumbnail */}
+                                <img
+                                    src={block.url}
+                                    alt="Preview"
+                                    className="max-h-[100px] max-w-full object-contain mb-2 border border-ink/20"
+                                    onError={e => { e.currentTarget.style.display = "none"; }}
+                                />
+                                <span className="font-mono text-[9px] text-ink/40">Click or drag to replace</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="material-symbols-outlined text-[28px] text-ink/30 mb-2">
+                                    {dragOver ? "file_download" : "add_photo_alternate"}
+                                </span>
+                                <span className="font-mono text-[10px] text-ink/60">Drag & drop or click to upload</span>
+                                <span className="font-mono text-[9px] text-ink/40 mt-0.5">JPG, PNG, GIF, WebP</span>
+                            </>
+                        )}
+                    </div>
+
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
+                    />
+
+                    {/* Upload error */}
+                    {uploadError && (
+                        <div className="mt-1.5 font-mono text-[10px] text-red-600 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">error</span>
+                            {uploadError}
+                        </div>
+                    )}
+
+                    {/* Divider with "or" */}
+                    <div className="flex items-center gap-2 my-2">
+                        <div className="flex-1 h-px bg-ink/10" />
+                        <span className="font-mono text-[9px] text-ink/30 uppercase">or paste URL</span>
+                        <div className="flex-1 h-px bg-ink/10" />
+                    </div>
+                </div>
+
+                {/* URL text input fallback */}
+                {field("Image URL", "url", "url", "https://example.com/banner.jpg")}
+
+                {/* Clear button */}
+                {block.url && (
+                    <button
+                        onClick={() => onChange({ ...block, url: "" })}
+                        className="w-full mb-3 py-1.5 border border-ink/30 font-mono text-[10px] uppercase text-ink/50 hover:text-red-500 hover:border-red-300 flex items-center justify-center gap-1 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[12px]">delete</span>
+                        Remove Image
+                    </button>
+                )}
+
+                {field("Caption (optional)", "caption", "text", "Check out our product")}
+            </>)}
+
+            {block.type === "cta_link"  && (<>
+                {field("Button Label", "label", "text", "Click here →")}
+                {field("Link URL", "url", "url", "{{page_link}}")}
+            </>)}
+            {block.type === "ai_msg" && (
+                <div className="border border-dashed border-ink/30 p-3 bg-mute">
+                    <div className="font-mono text-[10px] text-ink/50 mb-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
+                        AI-Generated
+                    </div>
+                    <p className="font-mono text-[10px] text-ink/60 leading-relaxed">
+                        This block is filled by the AI agent at send time from the lead's behavioral data. Configure the AI prompt in the Prompt tab.
+                    </p>
+                </div>
+            )}
+            {block.type === "divider" && (
+                <div className="font-mono text-[10px] text-ink/40">Renders as a horizontal rule (---) in the message.</div>
+            )}
+        </div>
+    );
+}
+
+
+
+function PlainChannelDesigner({ channel, title, icon }) {
+    const isSms = channel === "sms";
+    const accentColor = isSms ? "#10B981" : "#25D366";
+    const accentBg    = isSms ? "#ECFDF5" : "#DCFCE7";
+
+    // Block state
+    const [blocks, setBlocks]     = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [propTab, setPropTab]   = useState("block"); // "block" | "prompt"
+    const dragIdx = useRef(null);
+
+    // Prompt state (for AI engine tab)
+    const [prompt, setPrompt] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving,  setIsSaving]  = useState(false);
+    const [toast,     setToast]     = useState(null);
+
+    const token   = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const headers = token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+
+    const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+    useEffect(() => { loadSettings(); setBlocks([]); setSelectedId(null); }, [channel]);
+
+    const loadSettings = async () => {
+        setIsLoading(true);
+        try {
+            const res = await fetch(`${API}/channels/settings`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                const saved = isSms ? data.sms_template_blocks : data.whatsapp_template_blocks;
+                if (saved && Array.isArray(saved) && saved.length > 0) {
+                    setBlocks(saved);
+                } else {
+                    // Default starter blocks
+                    setBlocks([
+                        { id: uid(), type: "greeting",  text: "Hey {{customer_name}}," },
+                        { id: uid(), type: "ai_msg",    placeholder: true },
+                        { id: uid(), type: "cta_link",  label: "See how it works →", url: "{{page_link}}" },
+                        { id: uid(), type: "signature", text: "Best,\n{{sender_name}}" },
+                    ]);
+                }
+                setPrompt(isSms
+                    ? (data.sms_prompt || "You are a concise SMS outreach assistant. Keep messages under 160 chars. Use the message template blocks above to structure your reply.")
+                    : (data.whatsapp_prompt || "You are a friendly WhatsApp outreach assistant. Use emojis naturally. Follow the message block structure.")
+                );
+            }
+        } catch (e) { console.error("Load error", e); }
+        finally { setIsLoading(false); }
+    };
+
+    const save = async () => {
+        setIsSaving(true);
+        try {
+            const body = isSms
+                ? { sms_template_blocks: blocks, sms_prompt: prompt }
+                : { whatsapp_template_blocks: blocks, whatsapp_prompt: prompt };
+            const res = await fetch(`${API}/channels/settings`, { method: "PUT", headers, body: JSON.stringify(body) });
+            if (res.ok) showToast("Template Saved ✓");
+            else showToast("Save Failed", "error");
+        } catch { showToast("Network Error", "error"); }
+        finally { setIsSaving(false); }
+    };
+
+    const addBlock = (type) => {
+        const newBlock = { id: uid(), type, ...CHANNEL_BLOCK_DEFAULTS[type] };
+        setBlocks(p => [...p, newBlock]);
+        setSelectedId(newBlock.id);
+        setPropTab("block");
+    };
+
+    const updateBlock = (updated) => setBlocks(p => p.map(b => b.id === updated.id ? updated : b));
+    const deleteBlock = (id) => { setBlocks(p => p.filter(b => b.id !== id)); if (selectedId === id) setSelectedId(null); };
+    const moveBlock   = (id, dir) => setBlocks(p => {
+        const idx = p.findIndex(b => b.id === id);
+        const next = idx + dir;
+        if (next < 0 || next >= p.length) return p;
+        const a = [...p]; [a[idx], a[next]] = [a[next], a[idx]]; return a;
+    });
+
+    const onDragStart = (e, idx) => { dragIdx.current = idx; e.dataTransfer.effectAllowed = "move"; };
+    const onDragOver  = (e) => e.preventDefault();
+    const onDrop      = (e, idx) => {
+        e.preventDefault();
+        if (dragIdx.current === null || dragIdx.current === idx) return;
+        setBlocks(p => {
+            const a = [...p];
+            const [moved] = a.splice(dragIdx.current, 1);
+            a.splice(idx, 0, moved);
+            dragIdx.current = null;
+            return a;
+        });
+    };
+
+    const insertPromptVar = (v) => {
+        const el = document.getElementById(`${channel}_prompt_ta`);
+        if (!el) return;
+        const s = el.selectionStart, end = el.selectionEnd;
+        const t = `{{${v}}}`;
+        setPrompt(prompt.substring(0, s) + t + prompt.substring(end));
+        setTimeout(() => { el.focus(); el.selectionStart = el.selectionEnd = s + t.length; }, 0);
+    };
+
+    const selectedBlock = blocks.find(b => b.id === selectedId) || null;
+    const aiSample = isSms
+        ? "I noticed your team is exploring sales automation. Happy to help close more deals."
+        : "I noticed your team is exploring sales automation 🚀 Happy to help close more deals! Let's connect 🤝";
+    const totalChars = blocks.map(b => renderChannelBlock(b, aiSample)).join("\n\n").length;
+
+    return (
+        <div className="flex flex-col h-full bg-paper">
+            {/* Toast */}
+            {toast && (
+                <div className={`fixed bottom-6 right-6 z-[70] px-5 py-3 border border-ink font-mono text-sm shadow-lg ${toast.type === "error" ? "bg-red-50 text-red-700" : "bg-paper text-ink"}`}>
+                    {toast.msg}
+                </div>
+            )}
+
+            {/* ── Toolbar ── */}
+            <div className="bg-mute border-b-2 border-ink px-6 py-3 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-[20px]">{icon}</span>
+                    <span className="font-mono text-xs font-bold uppercase tracking-widest">{title}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {isSms && blocks.length > 0 && (
+                        <span className={`font-mono text-[10px] px-3 py-1 border border-ink ${totalChars > 160 ? "bg-red-50 text-red-600" : "bg-paper text-ink/60"}`}>
+                            ~{totalChars} chars{totalChars > 160 ? " ⚠" : ""}
+                        </span>
+                    )}
+                    <button onClick={save} disabled={isSaving || isLoading}
+                        className="h-9 px-5 bg-ink text-paper font-mono text-xs uppercase font-bold hover:bg-primary transition-colors flex items-center gap-2 disabled:opacity-50">
+                        <span className="material-symbols-outlined text-[15px]">{isSaving ? "sync" : "save"}</span>
+                        {isSaving ? "Saving..." : "Save Template"}
+                    </button>
+                </div>
+            </div>
+
+            {/* ── 3-Column Layout ── */}
+            <div className="flex flex-1 overflow-hidden min-h-0">
+
+                {/* ── LEFT: Block Palette (mirrors email) ── */}
+                <div className="w-[180px] shrink-0 border-r border-ink bg-paper overflow-y-auto flex flex-col">
+                    <div className="px-4 pt-4 pb-2">
+                        <div className="font-mono text-[10px] text-ink/40 uppercase tracking-widest">Add Blocks</div>
+                    </div>
+                    {CHANNEL_BLOCK_PALETTE.map(item => (
+                        <button key={item.type} onClick={() => addBlock(item.type)}
+                            className="flex items-center gap-3 px-4 py-3 border-b border-ink/20 hover:bg-mute text-left transition-colors group">
+                            <span className="material-symbols-outlined text-[18px] text-ink/50 group-hover:text-ink">{item.icon}</span>
+                            <span className="font-mono text-xs">{item.label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* ── CENTER: Device Preview Canvas ── */}
+                <div className="flex-1 overflow-y-auto bg-ink/5 p-6 flex items-start justify-center" onClick={() => setSelectedId(null)}>
+                    <div className="w-full max-w-[380px]">
+                        <div className="font-mono text-[10px] text-ink/40 uppercase tracking-widest text-center mb-4">
+                            Message Preview — Sample Values
+                        </div>
+
+                        {/* Phone frame */}
+                        <div className="mx-auto border-2 border-ink bg-paper" style={{ boxShadow: "4px 4px 0 0 rgba(10,10,10,1)" }}>
+                            {/* Header */}
+                            <div className="px-4 py-3 border-b-2 border-ink flex items-center gap-3" style={{ background: accentColor }}>
+                                <span className="material-symbols-outlined text-[20px] text-white">{icon}</span>
+                                <div>
+                                    <div className="font-mono text-xs font-bold text-white uppercase">{isSms ? "SMS Message" : "WhatsApp"}</div>
+                                    <div className="font-mono text-[10px] text-white/70">To: Alex Johnson</div>
+                                </div>
+                            </div>
+
+                            {/* Blocks canvas */}
+                            <div className="p-3 min-h-[320px]" style={{ background: isSms ? "#f0fdf4" : "#e5ddd5" }} onClick={e => e.stopPropagation()}>
+                                {isLoading ? (
+                                    <div className="flex items-center gap-2 opacity-40 py-12 justify-center">
+                                        <span className="material-symbols-outlined text-[24px] animate-spin">autorenew</span>
+                                        <span className="font-mono text-xs">Loading...</span>
+                                    </div>
+                                ) : blocks.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center text-center opacity-40 select-none py-16">
+                                        <span className="material-symbols-outlined text-[48px] mb-3">chat_bubble_outline</span>
+                                        <p className="font-display text-lg font-bold uppercase">Canvas Empty</p>
+                                        <p className="font-mono text-xs mt-1">Click blocks on the left to add them</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-1.5">
+                                        {/* Outgoing message bubble wrapping all blocks */}
+                                        <div className="ml-auto max-w-[88%] border-2 border-ink bg-white"
+                                            style={{ boxShadow: "2px 2px 0 0 rgba(10,10,10,0.8)" }}>
+                                            {blocks.map((block, idx) => (
+                                                <div key={block.id}
+                                                    draggable
+                                                    onDragStart={e => onDragStart(e, idx)}
+                                                    onDragOver={onDragOver}
+                                                    onDrop={e => onDrop(e, idx)}
+                                                    onClick={e => { e.stopPropagation(); setSelectedId(block.id); setPropTab("block"); }}
+                                                    className={`relative group cursor-pointer transition-all border-b border-ink/10 last:border-b-0 ${selectedId === block.id ? "ring-2 ring-inset ring-primary bg-primary/5" : "hover:bg-ink/5"}`}>
+                                                    {/* Block controls */}
+                                                    <div className={`absolute top-0.5 right-0.5 flex items-center gap-0 z-20 transition-opacity ${selectedId === block.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                                                        <span className="cursor-grab p-0.5 bg-paper border border-ink text-ink/50 material-symbols-outlined text-[12px]">drag_indicator</span>
+                                                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} className="p-0.5 bg-paper border border-ink text-ink/50 hover:text-ink">
+                                                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                                                        </button>
+                                                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} className="p-0.5 bg-paper border border-ink text-ink/50 hover:text-ink">
+                                                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                                                        </button>
+                                                        <button onClick={e => { e.stopPropagation(); deleteBlock(block.id); }} className="p-0.5 bg-paper border border-ink text-ink/50 hover:text-red-500">
+                                                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                                                        </button>
+                                                    </div>
+                                                    {/* Block type badge */}
+                                                    <div className={`absolute top-0.5 left-0.5 z-20 px-1 py-0.5 font-mono text-[8px] uppercase border transition-opacity ${selectedId === block.id ? "bg-primary text-white border-primary opacity-100" : "opacity-0 group-hover:opacity-100 bg-paper border-ink text-ink/60"}`}>
+                                                        {block.type.replace("_"," ")}
+                                                    </div>
+
+                                                    {/* Block preview content */}
+                                                    <div className="px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                                                        {block.type === "divider" ? (
+                                                            <hr className="border-ink/20 my-0.5" />
+                                                        ) : block.type === "image_url" ? (
+                                                            block.url ? (
+                                                                <div>
+                                                                    <div className="border border-ink/20 bg-ink/5 px-2 py-1.5 flex items-center gap-1.5 mb-1">
+                                                                        <span className="material-symbols-outlined text-[14px] text-ink/50">image</span>
+                                                                        <span className="text-[10px] text-ink/60 truncate">{fillSample(block.url)}</span>
+                                                                    </div>
+                                                                    {block.caption && <div className="text-[10px] text-ink/50">{fillSample(block.caption)}</div>}
+                                                                </div>
+                                                            ) : <span className="text-ink/30 italic">[No image URL set — click to edit]</span>
+                                                        ) : block.type === "ai_msg" ? (
+                                                            <span className="text-ink/50 italic">{aiSample}</span>
+                                                        ) : (
+                                                            renderChannelBlock(block, aiSample)
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="text-right mr-1 mt-0.5">
+                                            <span className="font-mono text-[9px] text-ink/40">Sent · Just now ✓✓</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Phone input bar */}
+                            <div className="px-4 py-3 border-t-2 border-ink flex items-center gap-2 bg-paper">
+                                <div className="flex-1 border border-ink/30 px-3 py-2 font-mono text-xs text-ink/30">Type a message...</div>
+                                <div className="w-8 h-8 flex items-center justify-center border-2 border-ink" style={{ background: accentColor }}>
+                                    <span className="material-symbols-outlined text-[16px] text-white">send</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── RIGHT: Properties & Prompt Panel (mirrors email right panel) ── */}
+                <div className="w-[270px] shrink-0 border-l border-ink bg-paper overflow-y-auto flex flex-col">
+                    {/* Tabs: Block | Prompt */}
+                    <div className="flex border-b border-ink shrink-0">
+                        <button onClick={() => setPropTab("block")}
+                            className={`flex-1 py-3 font-mono text-xs uppercase transition-colors ${propTab === "block" ? "bg-ink text-paper font-bold" : "hover:bg-mute"}`}>
+                            Block
+                        </button>
+                        <button onClick={() => setPropTab("prompt")}
+                            className={`flex-1 py-3 font-mono text-xs uppercase transition-colors ${propTab === "prompt" ? "bg-ink text-paper font-bold" : "hover:bg-mute"}`}>
+                            AI Prompt
+                        </button>
+                    </div>
+
+                    <div className="p-4 flex-1 overflow-y-auto">
+                        {propTab === "block" ? (
+                            <ChannelBlockProperties
+                                block={selectedBlock}
+                                onChange={updateBlock}
+                            />
+                        ) : (
+                            /* ── Prompt Settings tab ── */
+                            <div className="flex flex-col gap-4">
+                                <div className="font-mono text-[10px] text-ink/40 uppercase">AI Agent Instructions</div>
+                                <div className="border border-ink" style={{ boxShadow: "2px 2px 0 0 rgba(10,10,10,0.5)" }}>
+                                    <div className="bg-ink text-paper px-3 py-2 font-mono text-[10px] uppercase flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-[14px]">code</span>
+                                        Prompt Editor
+                                    </div>
+                                    <textarea id={`${channel}_prompt_ta`}
+                                        value={prompt}
+                                        onChange={e => setPrompt(e.target.value)}
+                                        disabled={isLoading}
+                                        rows={10}
+                                        className="w-full p-3 font-mono text-xs bg-paper border-none focus:outline-none focus:ring-0 resize-none leading-relaxed"
+                                        placeholder={`AI instructions for the ${channel.toUpperCase()} agent…`} />
+                                </div>
+                                <div className="font-mono text-[10px] text-ink/40 uppercase">Insert Variable</div>
+                                <div className="flex flex-col gap-1">
+                                    {["customer_name","customer_company","sender_name","page_link"].map(v => (
+                                        <button key={v} onClick={() => insertPromptVar(v)}
+                                            className="font-mono text-xs text-left px-3 py-2 border border-ink/20 hover:border-ink hover:bg-mute flex items-center justify-between group transition-colors">
+                                            <span><span className="text-ink/40">{"{{"}</span><span className="text-primary">{v}</span><span className="text-ink/40">{"}}"}</span></span>
+                                            <span className="material-symbols-outlined text-[13px] opacity-0 group-hover:opacity-100">add_circle</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="border border-dashed border-ink/30 p-3 bg-mute">
+                                    <p className="font-mono text-[10px] text-ink/60 leading-relaxed">
+                                        The prompt instructs the AI for the{" "}
+                                        <strong>{"{{ai_msg}}"}</strong>{" "}
+                                        block only. The other blocks are sent as-is.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Copy message button */}
+                    {blocks.length > 0 && (
+                        <div className="p-4 border-t border-ink shrink-0">
+                            <button
+                                onClick={() => { navigator.clipboard.writeText(buildPromptFromBlocks(blocks)); showToast("Message copied ✓"); }}
+                                className="w-full py-2 border border-ink font-mono text-xs uppercase hover:bg-mute flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                                Copy Message
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    );
+}
+
+

@@ -37,6 +37,8 @@ def _no_cache_headers() -> dict:
     }
 
 
+from services.scoring_service import ScoringService
+
 async def _record_event(token: str, event_type: str, request: Request):
     """
     Persist one open/click event (dual-layer pattern):
@@ -51,7 +53,7 @@ async def _record_event(token: str, event_type: str, request: Request):
     open_inc   = 1 if event_type == "open"  else 0
     click_inc  = 1 if event_type == "click" else 0
 
-    # Get existing record to check state
+    # Get existing record to check state and link to lead
     existing = await email_opens_collection.find_one({"token": token})
     
     set_fields = {}
@@ -66,10 +68,8 @@ async def _record_event(token: str, event_type: str, request: Request):
             set_fields["first_clicked_at"] = now
             
         # 💡 HEURISTIC: A click implies an open. 
-        # If open_count is still 0, increment it once on the first click.
         if not existing or existing.get("open_count", 0) == 0:
             open_inc = 1
-            # Also set the opened_at timestamps if they were never set
             if not existing or not existing.get("first_opened_at"):
                 set_fields["first_opened_at"] = now
             set_fields["last_opened_at"] = now
@@ -85,13 +85,42 @@ async def _record_event(token: str, event_type: str, request: Request):
     )
 
     # ── Event layer (insert) ──────────────────────────────────────────────────
-    await email_events_collection.insert_one({
+    event_doc = {
         "token":      token,
         "event_type": event_type,
         "timestamp":  now,
         "ip_address": ip,
         "user_agent": user_agent,
-    })
+    }
+    
+    # Link to lead if metadata exists in summary document
+    if existing:
+        lead_id = existing.get("lead_id")
+        company_id = existing.get("company_id")
+        if lead_id and company_id:
+            event_doc["lead_id"] = lead_id
+            event_doc["company_id"] = company_id
+            
+            # ── UPDATE INTENSITY SCORE ──
+            if event_type == "open":
+                await ScoringService.update_intensity_score(
+                    lead_id=lead_id,
+                    company_id=str(company_id),
+                    signal_type="email_open",
+                    weight=5,
+                    description="Email opened by lead"
+                )
+            elif event_type == "click":
+                await ScoringService.update_intensity_score(
+                    lead_id=lead_id,
+                    company_id=str(company_id),
+                    signal_type="email_click",
+                    weight=15,
+                    description="Link clicked in email"
+                )
+
+    await email_events_collection.insert_one(event_doc)
+
 
 
 # ── Open Pixel Endpoint ───────────────────────────────────────────────────────

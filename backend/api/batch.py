@@ -1,6 +1,7 @@
 import os
 import io
 import sys
+import re
 
 # Force UTF-8 output so Unicode characters in agent logs (e.g. →) don't crash on Windows
 if hasattr(sys.stdout, 'reconfigure'):
@@ -21,8 +22,8 @@ from bson import ObjectId
 from dependencies import get_current_user
 from db import batches_collection, leads_collection, pipeline_collection, email_logs_collection, agent_activity_collection, companies_collection
 
-# Import Ollama wrapper
-from api.agents import OllamaWrapper
+# Import Ollama wrapper + channel-draft helpers (used in pipeline auto-generation)
+from api.agents import OllamaWrapper, _build_channel_prompt, _channel_draft_async, _extract_channel_media
 
 # Import our LangGraph node compilers
 import sys
@@ -98,7 +99,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         if saved_file_paths:
             from agents.data_discovery_agent import DataDiscoveryAgent
             await push_batch_log(batch_id, "Running Data Discovery Agent...")
-            llm_discovery = OllamaWrapper('minimax-m2.5:cloud')
+            llm_discovery = OllamaWrapper()
             agent = DataDiscoveryAgent(llm_discovery)
             # Run synchronous LLM call in a thread so we don't block the event loop
             discovery_result = await asyncio.to_thread(agent.analyze_data_sources, saved_file_paths)
@@ -155,7 +156,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
         total = len(df_to_process)
         
         # Load the Ollama LLM
-        llm = OllamaWrapper('minimax-m2.5:cloud')
+        llm = OllamaWrapper()
         
         # Compile pipelines (once per batch, shared across all leads)
         agents = {
@@ -177,16 +178,20 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                 "operator_email": company_doc.get("email", "")
             }
         
+        start_msg = f"Processing subset of {total} leads (rows {start_idx} to {end_idx-1})" if total < original_total else f"Processing all {total} leads"
+        print(f"[Batch] {start_msg} | Batch ID: {batch_id}", flush=True)
+        await push_batch_log(batch_id, f"Starting pipeline: {start_msg}")
         await update_batch_progress(batch_id, {
             "percent": 0,
             "processed_count": 0,
             "total_count": total,
-            "agents": { k: "running" for k in ["research", "intent", "message", "timing", "logger"] },
-            "message": f"Processing subset of {total} leads (rows {start_idx} to {end_idx-1})" if total < original_total else f"Processing all {total} leads"
+            "agents": { k: "pending" for k in ["research", "intent", "message", "timing", "logger"] },
+            "message": start_msg
         })
         
         processed = 0
-        semaphore = asyncio.Semaphore(5)  # Limit concurrent LangGraph executions
+        semaphore = asyncio.Semaphore(3)  # Limit concurrent LangGraph executions (reduced from 5 to avoid Ollama overload)
+
 
         def safe_num(val, default=0, as_float=False):
             """Safely convert a value to int/float. Handles pipe-separated strings like '8 | 5 | 4'."""
@@ -215,13 +220,19 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                 if actual_col and pd.notna(row[actual_col]):
                     val = row[actual_col]
                     if is_list:
-                        # Handle pipe-separated or comma-separated links within a cell
-                        sub_vals = [v.strip() for v in str(val).replace("|", ",").split(",") if v.strip()]
-                        found_vals.extend(sub_vals)
+                        # Use robust regex to find all URLs regardless of delimiter
+                        val_str = str(val)
+                        urls = re.findall(r'https?://[^\s,|;<>\"\'\[\]\(\)\{\}]+', val_str)
+                        for url in urls:
+                            # Clean up trailing punctuation that might be caught by regex
+                            clean_url = re.sub(r'[,;\"\'\)\]\s\.]+$', '', url)
+                            if clean_url and clean_url not in found_vals:
+                                found_vals.append(clean_url)
+
                     else:
                         return val
             
-            return list(set(found_vals)) if is_list else default
+            return found_vals if is_list else default
 
         async def process_single_lead(index, row, _operator_info=operator_info):
             nonlocal processed
@@ -314,7 +325,33 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
 
             # Aggregate product links from multiple columns
             content_links_mapping = behavior.get("content_links", "page_link")
-            aggregated_links = get_mapped_val(row, content_links_mapping, is_list=True)
+            # Be inclusive: check mapped column AND common fallbacks (especially history columns)
+            search_cols = ["Product_Pages_Viewed", "Product Pages Viewed", "product_link", "url", "page_link", "landing_page", "Pages_Visited"]
+            if isinstance(content_links_mapping, str) and content_links_mapping not in search_cols:
+                search_cols.insert(0, content_links_mapping)
+            
+            aggregated_links = get_mapped_val(row, search_cols, is_list=True)
+            
+            cleaned_links = []
+            for link in aggregated_links:
+                l = str(link).strip()
+                if ("://" in l or ("." in l and "/" in l)) and len(l) > 8:
+                    l = re.sub(r'[,;\"\'\s\.]+$', '', l)
+                    if l and l not in cleaned_links:
+                        cleaned_links.append(l)
+
+
+            # Aggregate product images from multiple columns
+            common_image_cols = ["Product Image", "image_url", "image", "product_image", "media_url", "picture", "thumbnail"]
+            aggregated_images = get_mapped_val(row, common_image_cols, is_list=True)
+            cleaned_images = []
+            for img in aggregated_images:
+                i = str(img).strip()
+                if ("://" in i) and len(i) > 8:
+                    i = re.sub(r'[,;\"\'\s]+$', '', i)
+                    if i not in cleaned_images:
+                        cleaned_images.append(i)
+
             
             lead_dict = row.to_dict()
             lead_dict["lead_id"] = lead_id
@@ -323,13 +360,57 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             lead_dict["title"] = title
             lead_dict["company"] = company_mapped
             lead_dict["industry"] = industry
-            lead_dict["page_link"] = aggregated_links # Standardize for LangGraph
+            lead_dict["page_link"] = cleaned_links # Standardize for LangGraph
+            lead_dict["image_url"] = cleaned_images
             lead_dict["visits"] = visits
             lead_dict["time_on_site"] = time_spent
             lead_dict["pages_per_visit"] = pages
             lead_dict["converted"] = converted
-            lead_dict["page_link"] = aggregated_links # Standardize for LangGraph
             
+            # ── PRE-INGESTION: Save leads as 'Processing' immediately so UI isn't empty ──
+            # Also pre-populate scraped_media if images are found in CSV
+            csv_scraped_media = []
+            for idx, link in enumerate(cleaned_links):
+                img = cleaned_images[idx] if idx < len(cleaned_images) else None
+                csv_scraped_media.append({
+                    "url": link,
+                    "image": img,
+                    "name": link.split("/")[-1].replace(".html", "").replace("-", " ").title() or "Product"
+                })
+
+            await leads_collection.update_one(
+                {"lead_id": lead_id, "batch_id": batch_id},
+                {
+                    "$set": {
+                        "company_id": company_id,
+                        "profile": {
+                            "name": full_name,
+                            "email": email,
+                            "title": title,
+                            "company": company_mapped,
+                            "industry": industry,
+                            "region": region,
+                            "lead_source": lead_source,
+                            "image_url": cleaned_images[0] if cleaned_images else None,
+                            "all_images": cleaned_images
+                        },
+
+                        "intel": {
+                            "scraped_media": csv_scraped_media,
+                            "status": "extracting"
+                        },
+                        "page_link": cleaned_links,
+                        "raw_data": lead_dict,
+                        "status": "Processing",
+                        "updated_at": datetime.utcnow()
+
+                    },
+                    "$setOnInsert": {"created_at": datetime.utcnow()}
+                },
+                upsert=True
+            )
+
+
             async with semaphore:
                 if not emails_df.empty and 'lead_id' in emails_df.columns:
                     email_history = emails_df[emails_df['lead_id'] == lead_id].to_dict('records')
@@ -350,21 +431,39 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                 await push_batch_log(batch_id, f"Initializing pipeline for {company_name} (Lead ID: {lead_id})")
                 
                 try:
-                    # Run CPU/Network heavy LangGraph nodes individually in threads to allow real-time UI logging
+                    # ── Real-time per-agent status: update MongoDB as each node starts/finishes ──
+                    # Each lead runs concurrently, so we only update the batch-level agent status
+                    # when the FIRST lead starts/completes each stage (non-blocking best-effort).
+
+                    print(f"[Batch] Running lead {lead_id} ({company_name}) — Agent 1/5: Research", flush=True)
                     await push_batch_log(batch_id, f"[{company_name}] Running Agent: [1/5] Lead Web Research...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.research": "running"}}, upsert=False)
                     state = await asyncio.to_thread(agents['research'].invoke, state)
-                    
-                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [2/5] Intent Qualification Data Extraction...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.research": "completed"}}, upsert=False)
+
+                    print(f"[Batch] Lead {lead_id} — Agent 2/5: Intent", flush=True)
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [2/5] Intent Qualification...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.intent": "running"}}, upsert=False)
                     state = await asyncio.to_thread(agents['intent'].invoke, state)
-                    
-                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [3/5] Personalized Email Strategy Formulation...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.intent": "completed"}}, upsert=False)
+
+                    print(f"[Batch] Lead {lead_id} — Agent 3/5: Email Strategy", flush=True)
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [3/5] Email Strategy Formulation...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.message": "running"}}, upsert=False)
                     state = await asyncio.to_thread(agents['email'].invoke, state)
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.message": "completed"}}, upsert=False)
 
+                    print(f"[Batch] Lead {lead_id} — Agent 4/5: Follow-up Timing", flush=True)
                     await push_batch_log(batch_id, f"[{company_name}] Running Agent: [4/5] Follow-up Timing Optimization...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.timing": "running"}}, upsert=False)
                     state = await asyncio.to_thread(agents['timing'].invoke, state)
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.timing": "completed"}}, upsert=False)
 
-                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [5/5] Formatting and CRM Serialization...")
+                    print(f"[Batch] Lead {lead_id} — Agent 5/5: CRM Logger", flush=True)
+                    await push_batch_log(batch_id, f"[{company_name}] Running Agent: [5/5] CRM Serialization...")
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.logger": "running"}}, upsert=False)
                     state = await asyncio.to_thread(agents['logger'].invoke, state)
+                    await batches_collection.update_one({"batch_id": batch_id}, {"$set": {"agents.logger": "completed"}}, upsert=False)
                     
                     # Dump mapped state to MongoDB `leads` collection
                     await leads_collection.update_one(
@@ -378,7 +477,9 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                     "company": lead_dict.get("company"),
                                     "region": lead_dict.get("region"),
                                     "lead_source": lead_dict.get("lead_source"),
-                                    "industry": lead_dict.get("industry")
+                                    "industry": lead_dict.get("industry"),
+                                    "image_url": lead_dict.get("image_url", [None])[0] if lead_dict.get("image_url") else None,
+                                    "all_images": lead_dict.get("image_url", [])
                                 },
                                 "page_link": lead_dict.get("page_link", []),
                                 "contact": {
@@ -400,6 +501,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                                         "preview": state.get("email_preview", ""),
                                         "personalization_factors": state.get("personalization_factors", [])
                                     },
+                                    "scraped_media": state.get("scraped_media", []),
                                     "timing": state.get("timing", {}),
                                     "approach": state.get("approach", {}),
                                     "engagement_prediction": state.get("engagement_prediction", {})
@@ -420,22 +522,68 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                         upsert=True
                     )
                     
+                    # ── AUTO MULTI-CHANNEL DRAFT GENERATION ─────────────────────────────────────
+                    # After the 5-node pipeline, automatically generate SMS/WhatsApp/Voice drafts
+                    # so users don't need to trigger them manually. Each channel is attempted
+                    # independently — failure on one does NOT affect the others or the lead.
+                    await push_batch_log(batch_id, f"[{company_name}] Auto-generating multi-channel drafts (SMS / WhatsApp / Voice)...")
+
+                    # Fetch the fully-saved lead doc so _build_channel_prompt has all intel/profile fields
+                    saved_lead_doc = await leads_collection.find_one({"lead_id": lead_id, "batch_id": batch_id})
+
+                    if saved_lead_doc:
+                        from db import channel_settings_collection
+                        cfg = await channel_settings_collection.find_one({"company_id": company_id}) or {}
+                        all_links, all_images = _extract_channel_media(saved_lead_doc)
+                        page_link = all_links[0] if all_links else ""
+                        img_url = all_images[0] if all_images else ""
+
+                        for ch in ("sms", "whatsapp", "voice"):
+                            try:
+                                custom_prompt = cfg.get(f"{ch}_prompt")
+                                has_image = bool(all_images)
+                                ch_prompt = _build_channel_prompt(ch, saved_lead_doc, sender_company=company_name, custom_prompt=custom_prompt, has_image=has_image)
+                                ch_draft = await _channel_draft_async(ch_prompt)
+
+                                if ch == "sms" and ch_draft:
+                                    ch_draft = ch_draft[:160]  # SMS hard limit
+                                if ch_draft:
+                                    await leads_collection.update_one(
+                                        {"lead_id": lead_id, "batch_id": batch_id},
+                                        {"$set": {
+                                            f"intel.channels.{ch}.draft":    ch_draft,
+                                            f"intel.channels.{ch}.sent":     False,
+                                            f"intel.channels.{ch}.image_url": img_url,
+                                            f"intel.channels.{ch}.page_link": page_link,
+                                            f"intel.channels.{ch}.all_images": all_images,
+                                            f"intel.channels.{ch}.all_links": all_links,
+
+                                        }}
+                                    )
+                                    await push_batch_log(batch_id, f"[{company_name}] ✓ {ch.upper()} draft ready")
+                                else:
+                                    await push_batch_log(batch_id, f"[{company_name}] ⚠ {ch.upper()} draft was empty — skipped")
+                            except Exception as ch_err:
+                                safe_ch_err = str(ch_err).encode('utf-8', errors='replace').decode('utf-8')
+                                await push_batch_log(batch_id, f"[{company_name}] ⚠ {ch.upper()} draft failed: {safe_ch_err}")
+
                     # Log activity
                     await agent_activity_collection.insert_one({
                         "company_id": company_id,
                         "batch_id": batch_id,
                         "lead_id": lead_id,
                         "agent": "PIPELINE",
-                        "action": "Completed 5-node AI analysis",
+                        "action": "Completed 5-node AI analysis + multi-channel draft generation",
                         "status": "SUCCESS",
                         "timestamp": datetime.utcnow()
                     })
-                    await push_batch_log(batch_id, f"SUCCESS: Completed 5-node AI analysis for {company_name}")
+                    print(f"[Batch] ✓ Lead {lead_id} ({company_name}) fully complete.", flush=True)
+                    await push_batch_log(batch_id, f"SUCCESS: Completed full pipeline (5-node + 3 channels) for {company_name}")
 
                 except Exception as e:
                     # Sanitize the error message — strip any unencodable Unicode chars
                     safe_err = str(e).encode('utf-8', errors='replace').decode('utf-8')
-                    print(f"Error processing lead {lead_id}: {safe_err}")
+                    print(f"[Batch] ✗ Lead {lead_id} FAILED: {safe_err}", flush=True)
                     await push_batch_log(batch_id, f"ERROR: Failed processing {company_name} - {safe_err}")
                     await leads_collection.update_one(
                         {"lead_id": lead_id, "batch_id": batch_id},
@@ -452,10 +600,12 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
                     "total_count": total
                 })
 
-        # ── FIX #1: Build ALL coroutines first, then gather them concurrently ──
-        # The semaphore (limit=5) already prevents overwhelming Ollama;
-        # the old sleep(1.2) was both wrong (it ran tasks sequentially) and unnecessary.
+        # Build all coroutines and run them concurrently (semaphore limits to 5 at a time)
         tasks = [process_single_lead(index, row) for index, row in df_to_process.iterrows()]
+        print(f"[Batch] Launching {len(tasks)} lead tasks concurrently (semaphore=5)...", flush=True)
+        if not tasks:
+            print(f"[Batch] WARNING: No leads to process! Check CSV row range (start={start_idx}, end={end_idx}) and file: {leads_file}", flush=True)
+            await push_batch_log(batch_id, f"WARNING: 0 leads found to process. CSV has {original_total} rows. Check start/end index settings.")
         await asyncio.gather(*tasks)
             
         # Finish
@@ -466,7 +616,7 @@ async def process_batch_background(company_id_str: str, batch_id: str, start_ind
             "total_count": total,
             "agents": { k: "completed" for k in ["research", "intent", "message", "timing", "logger"] }
         })
-        print(f"Batch {batch_id} fully processed through LangGraph and synced to MongoDB.")
+        print(f"[Batch] ✓ Batch {batch_id} complete. {total} leads processed.", flush=True)
                 
     except Exception as e:
         print(f"Error during Background Batch processing: {e}")

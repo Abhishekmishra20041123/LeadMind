@@ -23,17 +23,17 @@ export default function MissionControl() {
     }, []);
 
     function formatPipelineValue(val) {
-        if (!val) return "$0";
-        if (val >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
-        if (val >= 1e3) return `$${(val / 1e3).toFixed(1)}K`;
-        return `$${val.toLocaleString()}`;
+        if (!val) return "₹0";
+        if (val >= 1e6) return `₹${(val / 1e6).toFixed(1)}M`;
+        if (val >= 1e3) return `₹${(val / 1e3).toFixed(1)}K`;
+        return `₹${val.toLocaleString()}`;
     }
 
     const kpis = [
         { label: "Total Leads", value: stats?.total_leads?.toLocaleString() || "0", icon: "groups", trend: "0%", trendUp: true, subtext: "vs last week", color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Live Visitors", value: stats?.live_visitors?.toLocaleString() || "0", icon: "sensors", trend: "Active", trendUp: true, subtext: "last 30m", color: "text-blue-600", valueColor: "text-ink" },
         { label: "High Intent", value: stats?.high_intent || "0", icon: "local_fire_department", trend: "0 new", trendUp: true, subtext: "since login", color: "text-primary", valueColor: "text-primary" },
-        { label: "Pipeline Value", value: stats ? formatPipelineValue(stats.pipeline_value) : "$0", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
-        { label: "Avg Score", value: `${stats?.avg_score || 0}%`, icon: "analytics", bar: parseInt(stats?.avg_score || 0), color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Pipeline Value", value: stats ? formatPipelineValue(stats.pipeline_value) : "₹0", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
     ];
 
     function timeAgo(ts) {

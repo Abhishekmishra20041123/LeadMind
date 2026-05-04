@@ -5,12 +5,15 @@ export default function Sidebar() {
     const pathname = usePathname();
 
     const navItems = [
-        { name: "Dashboard", path: "/", icon: "dashboard" },
-        { name: "The Leads", path: "/ledger", icon: "table_chart" },
-        { name: "Upload Leads", path: "/upload", icon: "cloud_upload" },
-        { name: "Email Designer", path: "/email-designer", icon: "draw" },
-        { name: "Agent Monitor", path: "/agents", icon: "memory", badge: "RUNNING" },
-        { name: "Settings", path: "/settings", icon: "settings" },
+        { name: "Dashboard",     path: "/",              icon: "dashboard" },
+        { name: "The Leads",     path: "/ledger",         icon: "table_chart" },
+        { name: "Pipeline",      path: "/pipeline",       icon: "view_kanban" },
+        { name: "Task Board",    path: "/tasks",          icon: "task_alt" },
+        { name: "Live Tracking", path: "/tracking",       icon: "radar" },
+        { name: "Upload Leads",  path: "/upload",         icon: "cloud_upload" },
+        { name: "Multi-Channel Designer",path: "/designer", icon: "draw" },
+        { name: "Agent Monitor", path: "/agents",         icon: "memory", badge: "RUNNING" },
+        { name: "Settings",      path: "/settings",       icon: "settings" },
     ];
 
     return (

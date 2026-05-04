@@ -1,8 +1,13 @@
 import asyncio
+import os
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+
+load_dotenv()
 
 async def main():
-    client = AsyncIOMotorClient("mongodb+srv://abhishekdb:abhishekdb@cluster0.b7f6x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+    mongo_url = os.getenv("mongodb", "mongodb://localhost:27017")
+    client = AsyncIOMotorClient(mongo_url)
     db = client["SalesAgent"]
     user = await db.companies.find_one({"email": "e2e@test.com"})
     print("USER IN DB:")

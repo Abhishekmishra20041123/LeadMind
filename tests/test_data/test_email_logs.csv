@@ -1,7 +1,0 @@
-nemail_id,lead_id,sent_time,email_type,response_status,replied_time,engagement_score
-E001,L001,2024-04-10 10:00:00,initial,opened,,20
-E002,L002,2024-04-01 14:00:00,initial,ignored,,10
-E003,L002,2024-04-05 11:00:00,followup_1,opened,,15
-E004,L003,2024-04-01 09:00:00,initial,opened,,25
-E005,L003,2024-04-05 15:00:00,followup_1,replied,2024-04-05 16:30:00,80
-E006,L003,2024-04-10 10:00:00,followup_2,opened,,30

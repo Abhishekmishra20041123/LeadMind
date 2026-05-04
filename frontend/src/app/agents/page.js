@@ -110,7 +110,7 @@ function AgentMonitorView() {
                 {/* VIEW LEADS CTA — appears only after batch completes */}
                 {isCompleted && (
                     <a
-                        href="/intel"
+                        href="/ledger"
                         className="h-9 px-5 bg-ink text-paper hover:bg-primary font-mono text-xs font-bold uppercase transition-colors flex items-center gap-2 border border-ink"
                     >
                         <span className="material-symbols-outlined text-[14px]">open_in_new</span>

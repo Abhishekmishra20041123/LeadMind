@@ -5,12 +5,15 @@ export default function Sidebar() {
     const pathname = usePathname();
 
     const navItems = [
-        { name: "Mission Control", path: "/", icon: "dashboard" },
-        { name: "Sales Pipeline", path: "/ledger", icon: "table_chart" },
-        { name: "Data Upload", path: "/upload", icon: "cloud_upload" },
-        { name: "Email Designer", path: "/email-designer", icon: "draw" },
-        { name: "Agent Monitor", path: "/agents", icon: "memory", badge: "RUNNING" },
-        { name: "Settings", path: "/settings", icon: "settings" },
+        { name: "Dashboard",     path: "/",              icon: "dashboard" },
+        { name: "The Leads",     path: "/ledger",         icon: "table_chart" },
+        { name: "Pipeline",      path: "/pipeline",       icon: "view_kanban" },
+        { name: "Task Board",    path: "/tasks",          icon: "task_alt" },
+        { name: "Live Tracking", path: "/tracking",       icon: "radar" },
+        { name: "Upload Leads",  path: "/upload",         icon: "cloud_upload" },
+        { name: "Multi-Channel Designer",path: "/designer", icon: "draw" },
+        { name: "Agent Monitor", path: "/agents",         icon: "memory", badge: "RUNNING" },
+        { name: "Settings",      path: "/settings",       icon: "settings" },
     ];
 
     return (
@@ -43,7 +46,18 @@ export default function Sidebar() {
                 })}
             </nav>
 
-
+            {/* <div className="mt-auto p-6 border-t border-ink text-ink">
+                <div className="border border-ink p-4 bg-mute">
+                    <h4 className="font-mono text-xs text-ink/60 mb-2 uppercase">Storage Usage</h4>
+                    <div className="w-full bg-white h-2 border border-ink mb-1">
+                        <div className="bg-ink h-full animate-pulse" style={{ width: '72%' }}></div>
+                    </div>
+                    <div className="flex justify-between font-mono text-[10px]">
+                        <span>72% USED</span>
+                        <span>1.2GB FREE</span>
+                    </div>
+                </div>
+            </div> */}
         </aside>
     );
 }

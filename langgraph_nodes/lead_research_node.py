@@ -10,7 +10,8 @@ def prepare_data(state):
     if not lead:
         return {**state, "status": "error", "error": "No lead data provided"}
     
-    clean_lead = {
+    clean_lead = lead.copy()
+    clean_lead.update({
         "lead_id": str(lead.get("lead_id", "")),
         "name": str(lead.get("name", "")),
         "visits": int(lead.get("visits", 0) if pd.notna(lead.get("visits")) else 0) if 'pd' in globals() else int(lead.get("visits", 0)),
@@ -21,10 +22,10 @@ def prepare_data(state):
         "region": str(lead.get("region", "")),
         "company": str(lead.get("company", "")),
         "title": str(lead.get("title", "")),
-        "industry": str(lead.get("industry", "Unknown")),
+        "industry": str(lead.get("industry", "General Business")),
         "company_size": str(lead.get("company_size", "Unknown")),
         "engagement_score": float(lead.get("engagement_score", 0.0))
-    }
+    })
     
     return {
         **state,

@@ -23,17 +23,17 @@ export default function MissionControl() {
     }, []);
 
     function formatPipelineValue(val) {
-        if (!val) return "$0";
-        if (val >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
-        if (val >= 1e3) return `$${(val / 1e3).toFixed(1)}K`;
-        return `$${val.toLocaleString()}`;
+        if (!val) return "₹0";
+        if (val >= 1e6) return `₹${(val / 1e6).toFixed(1)}M`;
+        if (val >= 1e3) return `₹${(val / 1e3).toFixed(1)}K`;
+        return `₹${val.toLocaleString()}`;
     }
 
     const kpis = [
         { label: "Total Leads", value: stats?.total_leads?.toLocaleString() || "0", icon: "groups", trend: "0%", trendUp: true, subtext: "vs last week", color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Live Visitors", value: stats?.live_visitors?.toLocaleString() || "0", icon: "sensors", trend: "Active", trendUp: true, subtext: "last 30m", color: "text-blue-600", valueColor: "text-ink" },
         { label: "High Intent", value: stats?.high_intent || "0", icon: "local_fire_department", trend: "0 new", trendUp: true, subtext: "since login", color: "text-primary", valueColor: "text-primary" },
-        { label: "Pipeline Value", value: stats ? formatPipelineValue(stats.pipeline_value) : "$0", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
-        { label: "Avg Score", value: `${stats?.avg_score || 0}%`, icon: "analytics", bar: parseInt(stats?.avg_score || 0), color: "text-ink/60", valueColor: "text-ink" },
+        { label: "Pipeline Value", value: stats ? formatPipelineValue(stats.pipeline_value) : "₹0", icon: "monetization_on", trend: null, subtext: "Projected Q4", color: "text-ink/60", valueColor: "text-ink" },
     ];
 
     function timeAgo(ts) {
@@ -53,9 +53,18 @@ export default function MissionControl() {
             <div className="bg-paper border-b border-ink px-8 py-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4 shrink-0">
                 <div>
                     <h2 className="font-display text-4xl font-bold uppercase tracking-tighter leading-none mb-1">Dashboard</h2>
-                    <p className="font-mono text-sm text-ink/60">Global Overview // <span id="current-date">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}</span></p>
+                    {/* <p className="font-mono text-sm text-ink/60">Global Overview // <span id="current-date">{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}</span></p> */}
                 </div>
-
+                <div className="flex gap-4">
+                    <button className="h-10 px-6 border border-ink bg-paper hover:bg-mute font-mono text-xs uppercase flex items-center gap-2 transition-colors">
+                        <span className="material-symbols-outlined text-[16px]">refresh</span>
+                        Refresh Data
+                    </button>
+                    <button onClick={() => router.push('/upload')} className="h-10 px-6 bg-primary text-white font-mono text-xs uppercase font-bold hover:bg-ink transition-colors flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        New Leads
+                    </button>
+                </div>
             </div>
 
             <div className="p-8 flex flex-col gap-8 max-w-[1600px] w-full mx-auto">
@@ -95,7 +104,7 @@ export default function MissionControl() {
                     <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
                         <div className="flex justify-between items-end border-b-3 border-ink pb-2">
                             <h3 className="font-display text-2xl font-bold uppercase">Priority Targets</h3>
-                            <a className="font-mono text-xs uppercase underline hover:text-primary" href="/ledger">View Sales Pipeline</a>
+                            <a className="font-mono text-xs uppercase underline hover:text-primary" href="/ledger">View Full Ledger</a>
                         </div>
                         <div className="flex flex-col gap-4">
                             {targets.map((t, i) => (
@@ -125,7 +134,7 @@ export default function MissionControl() {
                                         <div className="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 pt-4 border-t border-dashed border-ink/30">
                                             <p className="text-sm font-medium">Recent Signal: <span className="font-normal text-ink/70">{t.signal}</span></p>
                                             <a href={`/intel/${t.id}`} className="px-6 py-2 border border-ink font-mono text-xs uppercase font-bold hover:bg-ink hover:text-white transition-colors flex items-center justify-center gap-2 shrink-0">
-                                                View Insights <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                                Review Intel <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                                             </a>
                                         </div>
                                     </div>

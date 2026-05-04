@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export function UploadDropZone({ onSelect, file }) {
+export function MultiUploadDropZone({ files, setFiles }) {
     const [dragActive, setDragActive] = useState(false);
 
     const handleDrag = function (e) {
@@ -17,24 +17,27 @@ export function UploadDropZone({ onSelect, file }) {
         e.preventDefault();
         e.stopPropagation();
         setDragActive(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            onSelect(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            setFiles([...files, ...Array.from(e.dataTransfer.files)]);
         }
     };
 
     const handleChange = function (e) {
-        if (e.target.files && e.target.files[0]) {
-            onSelect(e.target.files[0]);
+        if (e.target.files && e.target.files.length > 0) {
+            setFiles([...files, ...Array.from(e.target.files)]);
         }
     };
 
+    const removeFile = (index) => {
+        const newFiles = [...files];
+        newFiles.splice(index, 1);
+        setFiles(newFiles);
+    };
+
     return (
-        <div className="relative group">
-            <div className="absolute -top-3 left-4 bg-paper px-2 z-10 border border-ink">
-                <span className="font-mono text-xs font-bold uppercase tracking-wider text-ink">Phase 01: Ingestion</span>
-            </div>
+        <div className="relative group flex flex-col gap-4">
             <div
-                className={`mt-4 h-[300px] w-full border-2 border-dashed ${dragActive ? "border-primary bg-primary/5" : "border-ink/40 bg-mute/50"
+                className={`h-[150px] w-full border-2 border-dashed ${dragActive ? "border-primary bg-primary/5" : "border-ink/40 bg-mute/50"
                     } relative flex flex-col items-center justify-center transition-all duration-300 hover:border-primary hover:bg-white group-hover:shadow-inner cursor-pointer`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -44,33 +47,37 @@ export function UploadDropZone({ onSelect, file }) {
                 {/* Hatch Background Pattern Simulation */}
                 <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: "repeating-linear-gradient(45deg, #0A0A0A 0, #0A0A0A 1px, transparent 0, transparent 10px)" }}></div>
 
-                <div className="flex flex-col items-center justify-center gap-4 bg-paper/90 p-8 border border-ink shadow-sm z-10 backdrop-blur-sm">
-                    <span className={`material-symbols-outlined text-5xl ${dragActive ? "text-primary" : "text-ink"}`}>upload_file</span>
-                    <div className="text-center">
-                        <h2 className="font-display text-2xl font-bold text-ink uppercase tracking-tight">{file ? file.name : "Drop Tactical Data (CSV)"}</h2>
-                        <p className="font-mono text-xs text-ink/60 mt-2 uppercase">Max Payload: 25MB // Schema: V4.0</p>
-                    </div>
-                    <label className="font-mono text-xs border border-ink px-4 py-2 hover:bg-ink hover:text-paper transition-colors uppercase mt-2 cursor-pointer">
-                        Select File Manually
+                <div className="flex flex-col items-center justify-center gap-2 bg-paper/90 p-4 border border-ink shadow-sm z-10 backdrop-blur-sm w-full max-w-sm text-center">
+                    <span className={`material-symbols-outlined text-3xl ${dragActive ? "text-primary" : "text-ink"}`}>upload_file</span>
+                    <h2 className="font-display text-lg font-bold text-ink uppercase tracking-tight">Drop Universal Data (CSV)</h2>
+                    <label className="font-mono text-[10px] border border-ink px-3 py-1 hover:bg-ink hover:text-paper transition-colors uppercase cursor-pointer">
+                        Select Multiple Files
                         <input
                             type="file"
                             className="hidden"
                             accept=".csv"
+                            multiple
                             onChange={handleChange}
-                            onClick={(e) => {
-                                // Allows selecting the same file again if aborted
-                                e.target.value = null;
-                            }}
+                            onClick={(e) => { e.target.value = null; }}
                         />
                     </label>
                 </div>
-
-                {/* Corner accents for 'scanner' look */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-l-2 border-t-2 border-ink"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-r-2 border-t-2 border-ink"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-l-2 border-b-2 border-ink"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-r-2 border-b-2 border-ink"></div>
             </div>
+
+            {/* List selected files */}
+            {files.length > 0 && (
+                <div className="flex flex-col gap-2 mt-4 bg-paper border border-ink p-4">
+                    <h3 className="font-mono text-xs font-bold uppercase border-b border-ink pb-2 mb-2">Staged Files ({files.length})</h3>
+                    {files.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs font-mono bg-mute/30 p-2 border-l-2 border-primary">
+                            <span>{f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
+                            <button onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700">
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

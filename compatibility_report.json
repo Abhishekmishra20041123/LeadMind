@@ -1,0 +1,423 @@
+[
+  {
+    "dataset": "boAt User Behavioral Data",
+    "files": [
+      "boAt User Behavioral Data - Sheet1.csv"
+    ],
+    "agent_tests": {
+      "DataDiscovery": {
+        "schema_analyzed": "\u2705 PASS",
+        "sufficient_data": "\u2705 PASS",
+        "identity_mapped": "\u2705 PASS",
+        "behavioral_mapped": "\u2705 PASS",
+        "business_detected": "\u2705 PASS",
+        "files_roles_set": "\u2705 PASS"
+      },
+      "SchemaMapping": {
+        "email_extractable": "\u2705 PASS",
+        "links_found_count_lead1": 1,
+        "links_found_count_lead2": 1
+      },
+      "Pipeline": [
+        {
+          "lead_id": "U1001",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 72.5,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 1301,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        },
+        {
+          "lead_id": "U1002",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 95.0,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 2946,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        }
+      ]
+    },
+    "final_status": "\u2705 PASS",
+    "error": null,
+    "discovery_result": {
+      "business_context": {
+        "company_name": "boAt (Lifestyle)",
+        "industry": "E-commerce",
+        "description": "Online retail data capturing user sessions, product views, and purchase transactions for consumer electronics such as earbuds, smartwatches, speakers and neckbands."
+      },
+      "files_roles": {
+        "primary_leads_file": "boAt User Behavioral Data - Sheet1.csv",
+        "email_history_file": null
+      },
+      "schema_mapping": {
+        "lead_id": "User ID",
+        "identity_fields": [
+          "User ID",
+          "Name",
+          "Email",
+          "Phone Number"
+        ],
+        "behavioral_fields": {
+          "visits": "No. of Visits",
+          "depth": "Pages Visited",
+          "content_links": "Product Page Link",
+          "time_on_site": "Total Time Spent (hrs)"
+        },
+        "sales_fields": {
+          "value": "Product Price (INR)",
+          "stage": "Checkout Initiated"
+        }
+      },
+      "is_sufficient": true,
+      "missing_critical_data": [],
+      "reasoning": "The dataset contains unique user identifiers (User ID, Name, Email, Phone Number), clear behavioral metrics (visit count, pages visited, time spent), product content (Product Name, Product Category, Product Page Link), and transaction outcomes (Cart Added, Checkout Initiated, Purchase Made, Product Price). These map directly to the required IDENTITY, BEHAVIOR, CONTENT and SALES semantic roles, allowing construction of user-level behavioral profiles and personalized outreach. No essential columns are completely missing, although some UTM and referrer fields are sparse but not required for basic profiling."
+    }
+  },
+  {
+    "dataset": "Bookswagon User Behavioral Data",
+    "files": [
+      "Bookswagon_User_Behavioral_Data - Sheet1 (1).csv"
+    ],
+    "agent_tests": {
+      "DataDiscovery": {
+        "schema_analyzed": "\u2705 PASS",
+        "sufficient_data": "\u2705 PASS",
+        "identity_mapped": "\u2705 PASS",
+        "behavioral_mapped": "\u2705 PASS",
+        "business_detected": "\u2705 PASS",
+        "files_roles_set": "\u2705 PASS"
+      },
+      "SchemaMapping": {
+        "email_extractable": "\u2705 PASS",
+        "links_found_count_lead1": 1,
+        "links_found_count_lead2": 1
+      },
+      "Pipeline": [
+        {
+          "lead_id": "USR001",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 72.5,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 2788,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        },
+        {
+          "lead_id": "USR002",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 78.5,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 1643,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        }
+      ]
+    },
+    "final_status": "\u2705 PASS",
+    "error": null,
+    "discovery_result": {
+      "business_context": {
+        "company_name": "Bookswagon",
+        "industry": "E-commerce",
+        "description": "Online bookstore platform capturing user browsing sessions, product views, cart actions, and purchase outcomes."
+      },
+      "files_roles": {
+        "primary_leads_file": "Bookswagon_User_Behavioral_Data - Sheet1 (1).csv",
+        "email_history_file": null
+      },
+      "schema_mapping": {
+        "lead_id": "User ID",
+        "identity_fields": [
+          "User ID",
+          "Full Name",
+          "Email",
+          "Phone Number"
+        ],
+        "behavioral_fields": {
+          "visits": "Total Visits",
+          "depth": "Pages Viewed Total",
+          "content_links": "Product Page URLs (Actual Links)",
+          "time_on_site": "Total Time Spent (min)"
+        },
+        "sales_fields": {
+          "value": null,
+          "stage": "Purchase Made"
+        }
+      },
+      "is_sufficient": true,
+      "missing_critical_data": [
+        "Closed deal revenue (actual transaction value)",
+        "Purchase date (deal timestamp)"
+      ],
+      "reasoning": "The dataset provides clear identity columns (User ID, Full Name, Email, Phone) and extensive behavioral metrics (visits, time on site, pages viewed, click count, scroll depth). Content information is captured via product titles, categories, URLs, ISBNs and pricing. While sales stage can be inferred from 'Purchase Made' and 'Checkout Started', there is no explicit column for the monetary value of a closed deal or the exact purchase timestamp, which would be needed for precise revenue analysis. Nonetheless, the data is sufficient to build a detailed behavioral profile and personalize outreach based on interests and engagement levels."
+    }
+  },
+  {
+    "dataset": "Theobroma Leads",
+    "files": [
+      "theobroma_data.csv"
+    ],
+    "agent_tests": {
+      "DataDiscovery": {
+        "schema_analyzed": "\u2705 PASS",
+        "sufficient_data": "\u2705 PASS",
+        "identity_mapped": "\u2705 PASS",
+        "behavioral_mapped": "\u2705 PASS",
+        "business_detected": "\u2705 PASS",
+        "files_roles_set": "\u2705 PASS"
+      },
+      "SchemaMapping": {
+        "email_extractable": "\u2705 PASS",
+        "links_found_count_lead1": 2,
+        "links_found_count_lead2": 3
+      },
+      "Pipeline": [
+        {
+          "lead_id": "L001",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 91.0,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 2082,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        },
+        {
+          "lead_id": "L002",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 95.0,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 5220,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        }
+      ]
+    },
+    "final_status": "\u2705 PASS",
+    "error": null,
+    "discovery_result": {
+      "business_context": {
+        "company_name": "Theobroma",
+        "industry": "E-commerce (Bakery & Desserts)",
+        "description": "Online bakery retailer selling cakes, brownies, desserts; tracks user visits, product engagement, cart and purchase activity."
+      },
+      "files_roles": {
+        "primary_leads_file": "theobroma_data.csv",
+        "email_history_file": null
+      },
+      "schema_mapping": {
+        "lead_id": "Lead_ID",
+        "identity_fields": [
+          "Lead_ID",
+          "First_Name",
+          "Last_Name",
+          "Email",
+          "Phone_Number"
+        ],
+        "behavioral_fields": {
+          "visits": "Total_Visits",
+          "depth": "Pages_Viewed",
+          "content_links": "Product_Pages_Viewed",
+          "time_on_site": "Total_Time_Spent_Sec"
+        },
+        "sales_fields": {
+          "value": "Purchase_Value",
+          "stage": "Lead_Status"
+        }
+      },
+      "is_sufficient": true,
+      "missing_critical_data": [],
+      "reasoning": "The dataset provides unique lead identifiers (Lead_ID, email, phone), comprehensive visit and engagement metrics (Total_Visits, time spent, pages viewed, bounce rate, device/browser), detailed product content (product URLs, categories, primary product value), and sales-related fields (cart value, purchase flag, purchase value, lead status). This allows building a behavioral profile and segmenting leads for outreach. No separate email history table is supplied, but the core data needed for personalized outreach is present."
+    }
+  },
+  {
+    "dataset": "Tiffany Leads",
+    "files": [
+      "tiffany_data.csv"
+    ],
+    "agent_tests": {
+      "DataDiscovery": {
+        "schema_analyzed": "\u2705 PASS",
+        "sufficient_data": "\u2705 PASS",
+        "identity_mapped": "\u2705 PASS",
+        "behavioral_mapped": "\u2705 PASS",
+        "business_detected": "\u2705 PASS",
+        "files_roles_set": "\u2705 PASS"
+      },
+      "SchemaMapping": {
+        "email_extractable": "\u2705 PASS",
+        "links_found_count_lead1": 1,
+        "links_found_count_lead2": 3
+      },
+      "Pipeline": [
+        {
+          "lead_id": "L_JX_001",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 88.5,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 1473,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        },
+        {
+          "lead_id": "L_JX_DEMO",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 88.5,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": true,
+          "email_length": 3162,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        }
+      ]
+    },
+    "final_status": "\u2705 PASS",
+    "error": null,
+    "discovery_result": {
+      "business_context": {
+        "company_name": "Tiffany & Co.",
+        "industry": "E-commerce",
+        "description": "Leads and sales data for Tiffany's luxury jewelry and watches, tracking engagement, deal stages, and conversion metrics."
+      },
+      "files_roles": {
+        "primary_leads_file": "tiffany_data.csv",
+        "email_history_file": null
+      },
+      "schema_mapping": {
+        "lead_id": "lead_id",
+        "identity_fields": [
+          "email",
+          "name",
+          "lead_id"
+        ],
+        "behavioral_fields": {
+          "visits": "visits",
+          "depth": "pages_per_visit",
+          "content_links": "page_link",
+          "time_on_site": "time_on_site"
+        },
+        "sales_fields": {
+          "value": "close_value",
+          "stage": "deal_stage"
+        }
+      },
+      "is_sufficient": true,
+      "missing_critical_data": [],
+      "reasoning": "The dataset contains key identity fields (email, name, lead_id), behavioural metrics (visits, time_on_site, pages_per_visit, page_link) and sales metrics (close_value, deal_stage), enabling construction of detailed lead profiles and personalized outreach. No separate email history file is present, but existing columns provide sufficient information for behavioural analysis."
+    }
+  },
+  {
+    "dataset": "Multi-file Dataset (Leads + Email + Sales)",
+    "files": [
+      "Leads_Data.csv",
+      "Email_Logs.csv",
+      "Sales_Pipeline.csv"
+    ],
+    "agent_tests": {
+      "DataDiscovery": {
+        "schema_analyzed": "\u2705 PASS",
+        "sufficient_data": "\u2705 PASS",
+        "identity_mapped": "\u2705 PASS",
+        "behavioral_mapped": "\u2705 PASS",
+        "business_detected": "\u2705 PASS",
+        "files_roles_set": "\u2705 PASS"
+      },
+      "SchemaMapping": {
+        "email_extractable": "\u2705 PASS",
+        "links_found_count_lead1": 0,
+        "links_found_count_lead2": 0
+      },
+      "Pipeline": [
+        {
+          "lead_id": "L001",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 25.0,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": false,
+          "email_length": 603,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        },
+        {
+          "lead_id": "L002",
+          "LeadResearch": "\u2705 PASS",
+          "IntentQualifier": "\u2705 PASS",
+          "intent_score": 74.0,
+          "EmailStrategy": "\u2705 PASS",
+          "email_generated": true,
+          "has_product_images": false,
+          "email_length": 968,
+          "FollowupTiming": "\u2705 PASS",
+          "CRMLogger": "\u2705 PASS"
+        }
+      ]
+    },
+    "final_status": "\u2705 PASS",
+    "error": null,
+    "discovery_result": {
+      "business_context": {
+        "company_name": "Sales Multi-Agent AI",
+        "industry": "SaaS (Sales Automation)",
+        "description": "AI\u2011powered sales automation platform that orchestrates lead qualification, follow\u2011ups, and multi\u2011channel outreach for B2B sales teams."
+      },
+      "files_roles": {
+        "primary_leads_file": "Leads_Data.csv",
+        "email_history_file": "Email_Logs.csv"
+      },
+      "schema_mapping": {
+        "lead_id": "lead_id",
+        "identity_fields": [
+          "name",
+          "title",
+          "company",
+          "lead_id",
+          "company_id"
+        ],
+        "behavioral_fields": {
+          "visits": "visits",
+          "depth": "pages_per_visit",
+          "content_links": "subject",
+          "time_on_site": "time_on_site",
+          "intent_score": "intent_score",
+          "lead_source": "lead_source"
+        },
+        "sales_fields": {
+          "value": "close_value",
+          "stage": "deal_stage"
+        }
+      },
+      "is_sufficient": true,
+      "missing_critical_data": [
+        "email_address",
+        "website_url_of_visited_pages"
+      ],
+      "reasoning": "Leads_Data.csv supplies core identity columns (name, title, company, lead_id) and detailed behavioral metrics (visits, time_on_site, pages_per_visit, intent_score, lead_source). Email_Logs.csv adds interaction data (opened, device, engagement_score) that can be used to personalize outreach. Sales pipeline information is available in Sales_Pipeline.csv (close_value, deal_stage). The only notable gaps are the lead\u2019s direct email address (needed to send messages) and the exact URLs of pages the lead visited, but the existing fields already provide enough information to build a behavioral profile and draft a personalized outreach."
+    }
+  }
+]

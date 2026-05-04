@@ -45,7 +45,26 @@ export default function SignupPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.password !== formData.confirmPassword) {
+        
+        const pwd = formData.password;
+        if (pwd.length < 8) {
+            setError("Password must be at least 8 characters");
+            return;
+        }
+        if (!/[A-Z]/.test(pwd)) {
+            setError("Password must contain at least 1 capital letter");
+            return;
+        }
+        if (!/[0-9]/.test(pwd)) {
+            setError("Password must contain at least 1 number");
+            return;
+        }
+        if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(pwd)) {
+            setError("Password must contain at least 1 symbol");
+            return;
+        }
+
+        if (pwd !== formData.confirmPassword) {
             setError("Passwords do not match");
             return;
         }
@@ -99,20 +118,20 @@ export default function SignupPage() {
                 {/* Left Side: Pitch Black Military Aesthetic */}
                 <div className="hidden lg:flex w-1/3 bg-[#0a0a0a] relative border-r border-primary/20 overflow-hidden flex-col justify-between p-12">
                     <div className="bg-military-grid absolute inset-0 z-0"></div>
-                    <div className="relative z-10">
+                    {/* <div className="relative z-10">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-[2px] bg-primary"></div>
                             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary font-bold">System Auth v4.0.1</p>
                         </div>
-                    </div>
+                    </div> */}
                     <div className="relative z-10 flex-1 flex flex-col items-start justify-center py-10 overflow-hidden">
                         <h1 className="vertical-text text-[8vh] max-h-full font-bold tracking-tighter text-slate-100 uppercase leading-none select-none whitespace-nowrap">
-                            STRATEGIC <span className="text-primary">GRID</span>
+                            Lead<span className="text-primary">Mind</span>
                         </h1>
                     </div>
                     <div className="relative z-10 flex flex-col gap-6">
                         <p className="font-mono text-[10px] text-slate-500 uppercase leading-relaxed max-w-[200px] tracking-widest font-bold">
-                            Standard protocol for high-density infrastructure verification.
+                            Sales Multi-Agent System For Lead Management.
                         </p>
                         <div className="h-[2px] w-full bg-primary/80"></div>
                     </div>
@@ -124,10 +143,10 @@ export default function SignupPage() {
                     <div className="flex items-center justify-between p-6 border-b border-slate-200">
                         <div className="flex items-center gap-4">
                             <span className="material-symbols-outlined text-slate-900">arrow_back</span>
-                            <h2 className="text-slate-900 text-xl font-bold uppercase tracking-tight">Step 1</h2>
+                            <h2 className="text-slate-900 text-xl font-bold uppercase tracking-tight">Signup Stage 1</h2>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-bold">Step</span>
+                            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-bold">Protocol</span>
                             <span className="font-mono text-[12px] text-primary font-bold">1 of 3</span>
                         </div>
                     </div>
@@ -235,7 +254,7 @@ export default function SignupPage() {
                     {/* Footer for visual balance */}
                     <div className="p-4 border-t border-slate-100 flex justify-between items-center shrink-0">
                         <img alt="Security Partner Logo" className="h-6 opacity-30 grayscale" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAV1MCjGHqGVuhCiWfdShFzfHAJHmkF0BpWbt7oxCqJB7vM3Q-uRPbN-zfzkYcuYMIJAkEPUERMclwcQxSG4RI43odfoOPDQNbGxPSb7Wyww5A0EZL7j_o12FY3Fkg5JdmACbf2mqSwDh3li-eSVKf0tixugzPxHxu_V1fdTuK8B_z1xWSJDznFJDRgjkVw0s-HpilpAz2cQsFzlxn1QYFKzg09vJWxCSLHiYwggmeMBpFt0I2LtTfThgNnnTWElgreDqPU0ioUjNQt" />
-                        <span className="font-mono text-[10px] text-slate-400 uppercase tracking-widest">Proprietary Military Grade Infrastructure</span>
+                        {/* <span className="font-mono text-[10px] text-slate-400 uppercase tracking-widest">Proprietary Military Grade Infrastructure</span> */}
                     </div>
                 </div>
             </div>
@@ -247,20 +266,20 @@ export default function SignupPage() {
             <div className="flex flex-col md:flex-row h-screen w-full bg-background-dark font-sans antialiased overflow-hidden">
                 <div className="hidden md:flex md:w-1/3 bg-[#0a0a0a] relative flex-col justify-between p-12 border-r border-primary/20 overflow-hidden">
                     <div className="bg-military-grid absolute inset-0 z-0"></div>
-                    <div className="relative z-10">
+                    {/* <div className="relative z-10">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-[2px] bg-primary"></div>
                             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary font-bold">System Auth v4.0.1</p>
                         </div>
-                    </div>
+                    </div> */}
                     <div className="relative z-10 flex-1 flex flex-col items-start justify-center py-10 overflow-hidden">
                         <h1 className="vertical-text text-[8vh] max-h-full font-bold tracking-tighter text-slate-100 uppercase leading-none select-none whitespace-nowrap">
-                            STRATEGIC <span className="text-primary">GRID</span>
+                            Lead<span className="text-primary">Mind</span>
                         </h1>
                     </div>
                     <div className="relative z-10 flex flex-col gap-6">
                         <p className="font-mono text-[10px] text-slate-500 uppercase leading-relaxed max-w-[200px] tracking-widest font-bold">
-                            Standard protocol for high-density infrastructure verification.
+                            Sales Multi-Agent System For Lead Management.
                         </p>
                         <div className="h-[2px] w-full bg-primary/80"></div>
                     </div>
@@ -332,20 +351,20 @@ export default function SignupPage() {
                         </form>
 
                         <div className="mt-8 pt-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-t border-black/10 shrink-0">
-                            <div className="flex flex-col gap-1">
+                            {/* <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 bg-primary rounded-full"></div>
                                     <span className="font-mono text-[9px] text-black/40 uppercase tracking-widest leading-none">Operational Security Level 4</span>
                                 </div>
                                 <span className="font-mono text-[9px] text-black/40 uppercase tracking-widest leading-none ml-4">LeadMind Access Control</span>
-                            </div>
+                            </div> */}
                         </div>
                     </div>
                 </div>
 
                 <div className="md:hidden fixed bottom-6 left-2 pointer-events-none z-20">
                     <p className="font-mono text-[8px] text-black/20 vertical-text uppercase tracking-[0.3em] font-bold">
-                        LEADMIND // SYSTEM V4.0.1
+                        LeadMind // SYSTEM V4.0.1
                     </p>
                 </div>
                 <div className="hidden md:block fixed bottom-12 left-12 pointer-events-none">
@@ -363,20 +382,20 @@ export default function SignupPage() {
             <div className="flex flex-col md:flex-row h-screen w-full bg-background-dark font-display antialiased overflow-hidden">
                 <div className="hidden md:flex w-1/3 bg-[#0a0a0a] border-r border-primary/20 relative overflow-hidden flex-col justify-between p-12">
                     <div className="bg-military-grid absolute inset-0 z-0"></div>
-                    <div className="relative z-10">
+                    {/* <div className="relative z-10">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-[2px] bg-primary"></div>
                             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary font-bold">System Auth v4.0.1</p>
                         </div>
-                    </div>
+                    </div> */}
                     <div className="relative z-10 flex-1 flex flex-col items-start justify-center py-10 overflow-hidden">
                         <h1 className="vertical-text text-[8vh] max-h-full font-bold tracking-tighter text-slate-100 uppercase leading-none select-none whitespace-nowrap">
-                            STRATEGIC <span className="text-primary">GRID</span>
+                            Lead<span className="text-primary">Mind</span>
                         </h1>
                     </div>
                     <div className="relative z-10 flex flex-col gap-6">
                         <p className="font-mono text-[10px] text-slate-500 uppercase leading-relaxed max-w-[200px] tracking-widest font-bold">
-                            Standard protocol for high-density infrastructure verification.
+                            Sales Multi-Agent System For Lead Management.
                         </p>
                         <div className="h-[2px] w-full bg-primary/80"></div>
                     </div>
@@ -403,8 +422,8 @@ export default function SignupPage() {
                         </div>
 
                         <div className="mb-8">
-                            <h2 className="text-black text-4xl font-bold leading-none tracking-tight mb-2">Step 3</h2>
-                            <p className="text-black/60 text-lg font-medium">Security settings configuration</p>
+                            <h2 className="text-black text-4xl font-bold leading-none tracking-tight mb-2">Signup Stage 3</h2>
+                            <p className="text-black/60 text-lg font-medium">Security protocol activation</p>
                         </div>
 
                         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -434,12 +453,20 @@ export default function SignupPage() {
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 bg-primary"></div>
-                                    <span className="font-mono text-[9px] uppercase text-black/60">Min 12 Chars</span>
+                                    <div className={`w-1.5 h-1.5 ${formData.password.length >= 8 ? 'bg-primary' : 'bg-black/20'}`}></div>
+                                    <span className="font-mono text-[9px] uppercase text-black/60">Min 8 Chars</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 bg-black/20"></div>
-                                    <span className="font-mono text-[9px] uppercase text-black/60">Special Symbol</span>
+                                    <div className={`w-1.5 h-1.5 ${/[0-9]/.test(formData.password) ? 'bg-primary' : 'bg-black/20'}`}></div>
+                                    <span className="font-mono text-[9px] uppercase text-black/60">1 Number</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-1.5 h-1.5 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(formData.password) ? 'bg-primary' : 'bg-black/20'}`}></div>
+                                    <span className="font-mono text-[9px] uppercase text-black/60">1 Symbol</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-1.5 h-1.5 ${/[A-Z]/.test(formData.password) ? 'bg-primary' : 'bg-black/20'}`}></div>
+                                    <span className="font-mono text-[9px] uppercase text-black/60">1 Capital</span>
                                 </div>
                             </div>
 
@@ -465,7 +492,7 @@ export default function SignupPage() {
                             </a>
                             <a className="text-black/20 flex flex-col items-center gap-1" href="#">
                                 <span className="material-symbols-outlined">dataset</span>
-                                <span className="font-mono text-[8px] font-bold">GRID</span>
+                                <span className="font-mono text-[8px] font-bold">Mind</span>
                             </a>
                             <a className="text-black/20 flex flex-col items-center gap-1" href="#">
                                 <span className="material-symbols-outlined">account_circle</span>

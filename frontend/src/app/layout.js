@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-    title: "LeadMind // Dashboard",
-    description: "LeadMind Sales Dashboard",
+    title: "LeadMind",
+    description: "Multi-Agent Sales Intelligence Dashboard",
 };
 
 export default function RootLayout({ children }) {

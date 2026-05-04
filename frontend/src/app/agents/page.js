@@ -25,10 +25,8 @@ function AgentMonitorView() {
                 .catch(console.error)
                 .finally(() => setFetchingLatest(false));
         } else {
-            setTimeout(() => {
-                setActiveBatchId(batchId);
-                setFetchingLatest(false);
-            }, 0);
+            setActiveBatchId(batchId);
+            setFetchingLatest(false);
         }
     }, [batchId]);
 
@@ -59,13 +57,30 @@ function AgentMonitorView() {
         );
     }
 
+    const isCompleted = progress.status === 'completed';
+    const isFailed    = progress.status === 'failed' || progress.status === 'error';
+
+    const isProcessing = progress.status === 'processing';
+
+    // UI-only status override: Show all as running if processing, all as completed if done.
+    // This provides a non-sequential, "all-at-once" pipeline visibility.
+    const getDisplayStatus = (id) => {
+        if (isCompleted) return 'completed';
+        if (isProcessing) return 'running';
+        if (isFailed) return progress.agents?.[id] || 'error';
+        return 'pending';
+    };
+
     const agentList = [
-        { id: 'research', name: 'Research Agent', status: progress.agents?.research || 'pending' },
-        { id: 'intent', name: 'Intent Scoring', status: progress.agents?.intent || 'pending' },
-        { id: 'message', name: 'Message Draft', status: progress.agents?.message || 'pending' },
-        { id: 'timing', name: 'Timing Engine', status: progress.agents?.timing || 'pending' },
-        { id: 'logger', name: 'Data Logger', status: progress.agents?.logger || 'pending' }
+        { id: 'research', name: 'Research Agent',      status: getDisplayStatus('research') },
+        { id: 'intent',   name: 'Intent Scoring',      status: getDisplayStatus('intent') },
+        { id: 'timing',   name: 'Timing Engine',       status: getDisplayStatus('timing') },
+        { id: 'logger',   name: 'CRM Logger',          status: getDisplayStatus('logger') },
+        { id: 'outreach', name: 'Multi-Channel Drafter', status: getDisplayStatus('message') }, 
     ];
+
+    const processedCount = progress.processed_count || 0;
+    const totalCount     = progress.total_count     || 0;
 
     return (
         <div className="flex flex-col h-full bg-paper relative bg-grid-pattern overflow-hidden">
@@ -77,19 +92,31 @@ function AgentMonitorView() {
                         <h2 className="font-display font-bold text-xl tracking-tight leading-none mt-0.5">{activeBatchId}</h2>
                     </div>
                     <div className="h-6 w-px bg-ink/20"></div>
-                    <div className="relative flex items-center gap-2 px-3 py-1.5 border border-ink overflow-hidden group">
+                    <div className="relative flex items-center gap-2 px-3 py-1.5 border border-ink overflow-hidden">
                         {progress.status === 'processing' ? (
                             <div className="absolute top-0 left-0 h-full bg-primary/20 transition-all duration-500" style={{ width: `${progress.percent}%` }}></div>
                         ) : null}
-                        <div className={`relative z-10 flex items-center gap-2 ${progress.status === 'processing' ? 'text-primary' : 'text-ink'}`}>
+                        <div className={`relative z-10 flex items-center gap-2 ${isCompleted ? 'text-green-600' : isFailed ? 'text-red-500' : 'text-primary'}`}>
                             <span className={`material-symbols-outlined text-[14px] ${progress.status === 'processing' ? 'animate-[spin_3s_linear_infinite]' : ''}`}>
-                                {progress.status === 'completed' ? 'check_circle' : 'sync'}
+                                {isCompleted ? 'check_circle' : isFailed ? 'error' : 'sync'}
                             </span>
-                            <span className="font-mono text-xs font-bold uppercase">{progress.percent}% COMPLETE // {progress.status}</span>
+                            <span className="font-mono text-xs font-bold uppercase">
+                                {progress.percent}% &bull; {progress.status}
+                                {totalCount > 0 ? ` — ${processedCount}/${totalCount} leads` : ''}
+                            </span>
                         </div>
                     </div>
                 </div>
-
+                {/* VIEW LEADS CTA — appears only after batch completes */}
+                {isCompleted && (
+                    <a
+                        href="/intel"
+                        className="h-9 px-5 bg-ink text-paper hover:bg-primary font-mono text-xs font-bold uppercase transition-colors flex items-center gap-2 border border-ink"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                        VIEW LEADS
+                    </a>
+                )}
             </header>
 
             {/* PIPELINE VISUALIZATION (SWIM LANES) */}
@@ -130,7 +157,7 @@ function AgentMonitorView() {
 
                                         <div className="flex justify-between items-start">
                                             <span className={`font-mono text-xs ${isRunning ? 'text-primary font-bold' : isCompleted ? 'text-paper/60' : isError ? 'text-red-500 font-bold' : 'text-ink/60'}`}>
-                                                0{index + 1} {"//"} {abbr}
+                                                0{index + 1} // {abbr}
                                             </span>
                                             <span className={`material-symbols-outlined ${isRunning ? 'text-primary animate-[spin_3s_linear_infinite]' : isCompleted ? 'text-data-green' : isError ? 'text-red-500' : 'text-ink/40'}`}>
                                                 {isRunning ? 'sync' : isCompleted ? 'check_circle' : isError ? 'error' : 'hourglass_empty'}

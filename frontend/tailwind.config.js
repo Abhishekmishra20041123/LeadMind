@@ -18,6 +18,8 @@ module.exports = {
                 "data-green": "#00CC66", // Data Green
                 "background-light": "#ffffff",
                 "background-dark": "#0a0a0a",
+                "neon-blue": "#00F3FF",
+                "soft-indigo": "#6366F1",
             },
             fontFamily: {
                 "display": ["Space Grotesk", "sans-serif"],
@@ -35,6 +37,12 @@ module.exports = {
             borderWidth: {
                 DEFAULT: '1px',
                 '3': '3px',
+            },
+            boxShadow: {
+                'premium': '8px 8px 0px 0px rgba(10, 10, 10, 1)',
+                'premium-hover': '12px 12px 0px 0px rgba(10, 10, 10, 0.8)',
+                'glow-primary': '0 0 15px rgba(249, 55, 6, 0.3)',
+                'glow-blue': '0 0 15px rgba(0, 243, 255, 0.3)',
             }
         },
     },

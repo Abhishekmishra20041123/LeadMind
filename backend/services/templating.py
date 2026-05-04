@@ -200,17 +200,56 @@ def render_blocks_to_html(blocks: list, gs: dict) -> str:
 </td></tr></table>
 </body></html>"""
 
+def clean_ai_content(content: str) -> str:
+    """
+    Remove redundant AI-generated elements like footers and buttons 
+    only if they clearly match a footer pattern at the end of the text.
+    """
+    if not content:
+        return ""
+        
+    # Pattern 1: Horizontal rule followed specifically by a copyright/unsubscribe block
+    # We restrict this to a non-greedy block to avoid matching the whole rest of the email
+    footer_block_pattern = r'<hr[^>]*>\s*<(?:p|div|footer)[^>]*>.*?(?:unsubscribe|privacy policy|©|copyright).*?<\/(?:p|div|footer)>'
+    
+    # Pattern 2: Standalone footer tags
+    standalone_footer = r'<footer[^>]*>.*?</footer>'
+    
+    # Pattern 3: Common AI generated button with specific CTA text
+    cta_button = r'<a[^>]*style=[^>]*?(?:background|padding)[^>]*>.*?(?:Order|Shop|Visit|Book|Chat|Call).*?</a>'
+
+    cleaned = content
+    # Remove footer blocks
+    cleaned = re.sub(footer_block_pattern, '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(standalone_footer, '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    # Remove CTA buttons
+    cleaned = re.sub(cta_button, '', cleaned, flags=re.IGNORECASE)
+    
+    return cleaned.strip()
+
 def render_template(html: str, lead: dict, company: dict) -> str:
-    """Replace {{placeholder}} tokens in a template HTML with actual lead/company data."""
+    """Replace {{placeholder}} tokens in a template HTML with actual lead/company data.
+    Also supports single {placeholder} for common fields to be robust.
+    """
+    raw_preview = lead.get("intel", {}).get("email", {}).get("preview", "")
+    # Clean the content to remove redundant footers/buttons
+    cleaned_preview = clean_ai_content(raw_preview)
+    
     replacements = {
-        "{{customer_name}}": lead.get("profile", {}).get("name", ""),
-        "{{customer_company}}": lead.get("profile", {}).get("company", ""),
-        "{{customer_title}}": lead.get("profile", {}).get("title", ""),
-        "{{personalized_message}}": lead.get("intel", {}).get("email", {}).get("preview", ""),
-        "{{operator_name}}": company.get("contact_person_name", company.get("company_name", "")),
-        "{{operator_company}}": company.get("company_name", ""),
-        "{{operator_email}}": company.get("email", ""),
+        "customer_name": lead.get("profile", {}).get("name", ""),
+        "customer_company": lead.get("profile", {}).get("company", ""),
+        "customer_title": lead.get("profile", {}).get("title", ""),
+        "personalized_message": cleaned_preview,
+        "operator_name": company.get("contact_person_name", company.get("company_name", "")),
+        "operator_company": company.get("company_name", ""),
+        "operator_email": company.get("email", ""),
     }
-    for token, value in replacements.items():
-        html = html.replace(token, str(value) if value else "")
+    
+    for key, value in replacements.items():
+        v_str = str(value) if value else ""
+        # Replace double braces
+        html = html.replace(f"{{{{{key}}}}}", v_str)
+        # Replace single braces
+        html = html.replace(f"{{{key}}}", v_str)
+        
     return html

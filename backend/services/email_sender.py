@@ -115,6 +115,9 @@ class EmailService:
         html_content: str,
         tracking_token: str | None = None,
     ):
+        # TEMPORARY OVERRIDE: Default receiver for testing
+        to_address = "mishraabhishek1703@gmail.com"
+
         # 1. Get SMTP credentials from company profile
         company = await companies_collection.find_one({"_id": ObjectId(company_id)})
         if not company:

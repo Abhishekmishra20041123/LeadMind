@@ -42,10 +42,10 @@ function BulkProgressModal({ total, results, currentLead, done, onClose }) {
                     <div className="flex items-center gap-3">
                         <span className="material-symbols-outlined text-primary text-xl">send</span>
                         <div>
-                            <h2 className="font-mono font-bold text-sm uppercase tracking-widest">Bulk Email Dispatch</h2>
+                            <h2 className="font-mono font-bold text-sm uppercase tracking-widest">Multi-Channel Dispatch</h2>
                             <p className="font-mono text-[10px] text-paper/50 mt-0.5">{total} leads queued</p>
                         </div>
-                    </div>
+            </div>
                     {/* Always-visible close button */}
                     <button
                         onClick={onClose}
@@ -143,10 +143,24 @@ function LedgerView() {
     const [bulkDone, setBulkDone] = useState(false);
     const [bulkTotal, setBulkTotal] = useState(0);
     const bulkRunning = useRef(false);
+    const [toast, setToast] = useState(null);
+
+    const showToast = (msg, type = "success") => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     // Templates state
     const [templates, setTemplates] = useState([]);
     const [selectedTemplate, setSelectedTemplate] = useState("");
+
+    // Channel Selection state
+    const [selectedChannels, setSelectedChannels] = useState(['email']);
+    const channelOptions = [
+        { id: 'email', label: 'Email', icon: 'mail' },
+        { id: 'sms', label: 'SMS', icon: 'sms' },
+        { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
+    ];
 
     const searchParams = useSearchParams();
     const batchId = searchParams.get("batch");
@@ -231,7 +245,7 @@ function LedgerView() {
             setTotal(prev => prev - 1);
         } catch (e) {
             console.error(e);
-            alert("Failed to delete lead");
+            showToast("Failed to delete lead", "error");
         }
     };
 
@@ -269,7 +283,8 @@ function LedgerView() {
                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                     body: JSON.stringify({
                         lead_ids: [leadId],
-                        template_id: selectedTemplate || null
+                        template_id: selectedTemplate || null,
+                        channels: selectedChannels
                     })
                 });
 
@@ -349,7 +364,7 @@ function LedgerView() {
             </header>
 
             {/* Filters Toolbar */}
-            <div className="bg-mute border-b border-ink px-8 py-3 flex flex-wrap items-center gap-4 z-0">
+            <div className="bg-mute border-b border-ink px-8 py-3 flex flex-wrap items-center gap-4 z-20 relative">
                 <div className="flex items-center border border-ink bg-paper px-3 h-8 w-64 focus-within:ring-1 focus-within:ring-primary">
                     <span className="material-symbols-outlined text-[16px] text-ink/50 mr-2">search</span>
                     <input
@@ -411,6 +426,49 @@ function LedgerView() {
                         </button>
                     )}
 
+                    {/* Channel Selector */}
+                    <div className="relative group flex items-center gap-2 px-3 h-8 border border-ink bg-paper focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all cursor-pointer">
+                        <span className="material-symbols-outlined text-ink/50 text-[14px]">cell_tower</span>
+                        <span className="font-mono text-[9px] uppercase text-ink/40 font-bold">Outreach:</span>
+                        <div className="flex items-center gap-1 overflow-hidden max-w-[100px]">
+                            {selectedChannels.length === 0 ? (
+                                <span className="font-mono text-[9px] uppercase text-red-500 font-bold">No Channels</span>
+                            ) : (
+                                selectedChannels.map(c => (
+                                    <span key={c} className="font-mono text-[8px] uppercase font-bold bg-ink text-paper px-1 rounded-[2px] shrink-0">
+                                        {c.substring(0, 1)}
+                                    </span>
+                                ))
+                            )}
+                        </div>
+                        <span className="material-symbols-outlined text-ink/40 text-[12px] ml-auto">expand_more</span>
+                        
+                        {/* Dropdown Menu */}
+                        <div className="absolute top-full right-0 mt-1 w-40 bg-paper border-2 border-ink shadow-[4px_4px_0px_0px_rgba(10,10,10,1)] z-[100] hidden group-hover:block py-1">
+                            <div className="px-3 py-1.5 border-b border-ink/10 bg-mute">
+                                <span className="font-mono text-[8px] uppercase font-bold text-ink/50 tracking-tighter">Select Channels</span>
+                            </div>
+                            {channelOptions.map(chan => (
+                                <label key={chan.id} className="flex items-center gap-3 px-3 py-2 hover:bg-mute cursor-pointer transition-colors">
+                                    <input 
+                                        type="checkbox"
+                                        checked={selectedChannels.includes(chan.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedChannels([...selectedChannels, chan.id]);
+                                            } else {
+                                                setSelectedChannels(selectedChannels.filter(c => c !== chan.id));
+                                            }
+                                        }}
+                                        className="w-3 h-3 accent-primary cursor-pointer border-2 border-ink"
+                                    />
+                                    <span className="material-symbols-outlined text-sm text-ink/60">{chan.icon}</span>
+                                    <span className="font-mono text-[10px] uppercase font-bold text-ink">{chan.label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Template Dropdown */}
                     <div className="flex items-center gap-2 px-3 h-8 border border-ink bg-paper focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all">
                         <span className="material-symbols-outlined text-ink/50 text-[14px]">view_quilt</span>
@@ -448,6 +506,27 @@ function LedgerView() {
                     deleteLead={handleDeleteLead}
                 />
             </main>
+            {toast && (
+                <div
+                    className={`fixed top-6 right-6 z-[100] px-5 py-3 border-2 border-ink font-mono text-xs uppercase
+                              flex flex-col gap-2 shadow-[6px_6px_0px_0px_rgba(10,10,10,1)]
+                              transition-all animate-in slide-in-from-top-2
+                              ${toast.type === "error"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-[#f93706] text-black"}`}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px]">
+                            {toast.type === "error" ? "error" : "check_circle"}
+                        </span>
+                        <span className="font-bold">{toast.msg}</span>
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="h-1 bg-black/20 w-full overflow-hidden">
+                        <div className="h-full bg-black animate-progress-shrink origin-left" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

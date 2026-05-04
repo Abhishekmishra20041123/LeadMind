@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 export default function Header() {
     const [user, setUser] = useState(null);
@@ -24,9 +23,7 @@ export default function Header() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
-        setTimeout(() => {
-            setIsLoggedIn(!!localStorage.getItem("access_token"));
-        }, 0);
+        setIsLoggedIn(!!localStorage.getItem("access_token"));
     }, []);
 
     const handleLogout = () => {
@@ -36,11 +33,13 @@ export default function Header() {
 
     return (
         <header className="bg-ink text-paper h-12 flex items-center justify-between px-6 border-b border-ink shrink-0 z-50">
-            <div className="flex items-center gap-4">
-                <span className="material-symbols-outlined text-[20px]">grid_view</span>
-                <Link href="/" className="font-display font-bold text-lg tracking-tight hover:text-primary transition-colors">
-                    LEADMIND <span className="text-primary text-xs align-top ml-1">v2.4.0</span>
-                </Link>
+            <div className="flex items-center gap-3">
+                <div className="w-8 h-8 flex items-center justify-center">
+                    <img src="/logo.png" alt="LeadMind" className="w-full h-full object-contain" />
+                </div>
+                <a href="/" className="font-display font-bold text-xl tracking-tight hover:text-primary transition-colors">
+                    LeadMind
+                </a>
             </div>
 
             <div className="flex items-center gap-6 font-mono text-sm">

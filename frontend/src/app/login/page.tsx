@@ -46,20 +46,20 @@ export default function LoginPage() {
                 {/* Left Side: Military Grid Aesthetic */}
                 <div className="relative hidden lg:flex w-1/2 flex-col justify-between bg-[#0a0a0a] p-12 border-r border-primary/20 overflow-hidden">
                     <div className="bg-military-grid absolute inset-0 z-0"></div>
-                    <div className="relative z-10">
+                    {/* <div className="relative z-10">
                         <div className="flex items-center gap-4">
                             <div className="w-8 h-[2px] bg-primary"></div>
-                            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary font-bold">User Login</p>
+                            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary font-bold">System Auth v4.0.1</p>
                         </div>
-                    </div>
+                    </div> */}
                     <div className="relative z-10 flex-1 flex flex-col items-start justify-center py-10 overflow-hidden">
                         <h1 className="vertical-text text-[8vh] max-h-full font-bold tracking-tighter text-slate-100 uppercase leading-none select-none whitespace-nowrap">
-                            LEAD<span className="text-primary">MIND</span>
+                            Lead<span className="text-primary">Mind</span>
                         </h1>
                     </div>
                     <div className="relative z-10 flex flex-col gap-6">
                         <p className="font-mono text-[10px] text-slate-500 uppercase leading-relaxed max-w-[200px] tracking-widest font-bold">
-                            Standard login for LeadMind dashboard.
+                            Sales Multi-Agent System For Lead Management.
                         </p>
                         <div className="h-[2px] w-full bg-primary/80"></div>
                     </div>
@@ -76,7 +76,7 @@ export default function LoginPage() {
                     {/* Mobile Header Only */}
                     <div className="lg:hidden mb-8 flex items-center justify-between border-b border-slate-200 pb-4 shrink-0">
                         <div className="flex flex-col">
-                            <span className="font-mono text-[10px] text-primary font-bold tracking-widest">USER LOGIN</span>
+                            <span className="font-mono text-[10px] text-primary font-bold tracking-widest">SYSTEM V4.0.1</span>
                             <h2 className="font-display text-xl font-bold text-slate-900 uppercase">LeadMind</h2>
                         </div>
                         <span className="material-symbols-outlined text-slate-900">shield</span>
@@ -85,7 +85,7 @@ export default function LoginPage() {
                     <div className="mx-auto w-full max-w-sm">
                         <div className="mb-10">
                             <h3 className="font-display text-4xl font-bold tracking-tight text-slate-900">Welcome Back</h3>
-                            <p className="mt-2 text-sm text-slate-500 font-mono">Please sign in to access your dashboard</p>
+                            {/* <p className="mt-2 text-sm text-slate-500 font-mono">Secure Terminal Access Required</p> */}
                         </div>
 
                         {error && (
@@ -140,7 +140,7 @@ export default function LoginPage() {
 
                         <div className="mt-12 text-center border-t border-slate-200 pt-8">
                             <p className="font-mono text-xs text-slate-500">
-                                Don&apos;t have an account?{' '}
+                                Don't have an account?{' '}
                                 <Link href="/signup" className="font-bold text-slate-900 hover:text-primary transition-colors">Sign up</Link>
                             </p>
                         </div>

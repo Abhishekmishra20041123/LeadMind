@@ -31,35 +31,47 @@ class IntentQualifierAgent:
         print(f"Loaded email data shape: {self.email_data.shape}")
         print(f"Email columns: {self.email_data.columns.tolist()}")
     
-    def _validate_data(self):
-        """Validate and prepare data for the workflow"""
-        if self.leads_data is None or self.email_data is None:
+    def _validate_data(self, mapping=None):
+        """Validate and prepare data using discovered mapping"""
+        if self.leads_data is None:
             raise ValueError("Must load data before processing")
+            
+        m = mapping or {
+            "behavioral_fields": {
+                "visits": "website_visits",
+                "depth": "content_downloads"
+            },
+            "lead_id": "lead_id"
+        }
         
         # Convert leads to list format
         leads_list = []
         for _, row in self.leads_data.iterrows():
+            id_col = m.get("lead_id", "lead_id")
+            v_col = m["behavioral_fields"].get("visits", "website_visits")
+            depth_col = m["behavioral_fields"].get("depth", "content_downloads")
+            
             lead = {
-                "lead_id": str(row.get("lead_id", "")),
+                "lead_id": str(row.get(id_col, "")),
                 "company": str(row.get("company", "")),
-                "title": str(row.get("title", "")),
                 "industry": str(row.get("industry", "")),
-                "visits": int(row.get("visits", row.get("website_visits", 0))),  # support both column names
-                "content_downloads": int(row.get("content_downloads", 0))
+                "website_visits": int(row.get(v_col, 0)),
+                "content_downloads": int(row.get(depth_col, 0))
             }
             leads_list.append(lead)
         
-        # Convert emails to list format
+        # Convert emails (Optional)
         emails_list = []
-        for _, row in self.email_data.iterrows():
-            email = {
-                "email_id": str(row.get("email_id", "")),
-                "lead_id": str(row.get("lead_id", "")),
-                "opened": bool(row.get("opened", False)),
-                "replied": bool(row.get("replied", False)),
-                "click_count": int(row.get("click_count", 0))
-            }
-            emails_list.append(email)
+        if self.email_data is not None:
+            for _, row in self.email_data.iterrows():
+                email = {
+                    "email_id": str(row.get("email_id", "")),
+                    "lead_id": str(row.get("lead_id", "")),
+                    "opened": bool(row.get("opened", False)),
+                    "replied": bool(row.get("replied", False)),
+                    "click_count": int(row.get("click_count", 0))
+                }
+                emails_list.append(email)
         
         return leads_list, emails_list
     

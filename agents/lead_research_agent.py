@@ -26,38 +26,61 @@ class LeadResearchAgent:
             except:
                 print("Sales pipeline data unavailable or could not be loaded")
     
-    def _validate_data(self):
-        """Validate and prepare data for the workflow"""
-        # Convert leads to list format
+    def _validate_data(self, mapping=None):
+        """Validate and prepare data for the workflow using discovered mapping"""
         leads_list = []
+        
+        # Default mapping if none provided (backward compatibility)
+        m = mapping or {
+            "behavioral_fields": {
+                "visits": "visits",
+                "depth": "pages_per_visit",
+                "content_links": "page_link"
+            },
+            "lead_id": "lead_id"
+        }
+
         if self.leads_data is not None:
             for _, row in self.leads_data.iterrows():
+                # Dynamic extraction based on mapping
+                v_col = m["behavioral_fields"].get("visits", "visits")
+                tos_col = m["behavioral_fields"].get("time_on_site", "time_on_site")
+                depth_col = m["behavioral_fields"].get("depth", "pages_per_visit")
+                link_col = m["behavioral_fields"].get("content_links", "page_link")
+                
+                v = float(row.get(v_col, 0))
+                tos = float(row.get(tos_col, 0.0))
+                ppv = float(row.get(depth_col, 0.0))
+                
                 lead = {
-                    'visits': int(row.get('visits', 0)),
-                    'time_on_site': float(row.get('time_on_site', 0.0)),
-                    'pages_per_visit': float(row.get('pages_per_visit', 0.0)),
+                    'visits': int(v),
+                    'time_on_site': tos,
+                    'pages_per_visit': ppv,
                     'converted': bool(row.get('converted', False)),
-                    'lead_source': str(row.get('lead_source', '')),
-                    'region': str(row.get('region', '')),
                     'company': str(row.get('company', '')),
-                    'title': str(row.get('title', ''))
+                    'priority_links': str(row.get(link_col, '')).split(',')
                 }
+                lead['interaction_quality'] = tos / max(ppv, 1.0)
                 leads_list.append(lead)
                 
         # Convert sales to list format
         sales_list = []
-        if self.sales_pipeline is not None:
-            for _, row in self.sales_pipeline.iterrows():
-                sale = {
-                    'opportunity_id': str(row.get('opportunity_id', '')),
-                    'deal_stage': str(row.get('deal_stage', '')),
-                    'close_value': float(row.get('close_value', 0.0)),
-                    'company': str(row.get('company', '')),
-                    'lead_id': str(row.get('lead_id', '')),
-                    'close_date': str(row.get('close_date', '')),
-                    'engage_date': str(row.get('engage_date', ''))
-                }
-                sales_list.append(sale)
+        # If sales_pipeline is missing but leads_data has sales columns, use leads_data
+        data_source = self.sales_pipeline if self.sales_pipeline is not None else self.leads_data
+        
+        if data_source is not None:
+            for _, row in data_source.iterrows():
+                if 'opportunity_id' in row:
+                    sale = {
+                        'opportunity_id': str(row.get('opportunity_id', '')),
+                        'deal_stage': str(row.get('deal_stage', '')),
+                        'close_value': float(row.get('close_value', 0.0)),
+                        'company': str(row.get('company', '')),
+                        'lead_id': str(row.get('lead_id', '')),
+                        'close_date': str(row.get('close_date', '')),
+                        'engage_date': str(row.get('engage_date', ''))
+                    }
+                    sales_list.append(sale)
                 
         return leads_list, sales_list
     

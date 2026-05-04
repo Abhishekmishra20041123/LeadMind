@@ -1,11 +1,20 @@
-<!DOCTYPE html><html class="dark" lang="en"><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;family=Roboto+Mono&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script id="tailwind-config">
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;family=Roboto+Mono&amp;display=swap"
+        rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -30,114 +39,138 @@
             },
         }
     </script>
-<style>
+    <style>
         .grid-pattern {
             background-image: linear-gradient(to right, rgba(249, 55, 6, 0.05) 1px, transparent 1px),
-                              linear-gradient(to bottom, rgba(249, 55, 6, 0.05) 1px, transparent 1px);
+                linear-gradient(to bottom, rgba(249, 55, 6, 0.05) 1px, transparent 1px);
             background-size: 20px 20px;
         }
+
         .vertical-text {
             writing-mode: vertical-rl;
             text-orientation: mixed;
         }
     </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-  </head>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+
 <body class="bg-background-light dark:bg-background-dark font-body antialiased">
-<div class="relative flex min-h-screen w-full flex-col lg:flex-row overflow-hidden">
-<!-- Left Side: Military Grid Aesthetic -->
-<div class="relative hidden lg:flex w-1/2 flex-col justify-between bg-background-dark p-12 border-r border-primary/20 grid-pattern">
-<div class="z-10">
-<div class="flex items-center gap-3">
-<span class="text-primary material-symbols-outlined" style="font-size: 32px;">grid_view</span>
-<div class="flex flex-col">
-<span class="font-mono text-[10px] tracking-widest text-primary uppercase" style="">User Login</span>
-<div class="h-[1px] w-12 bg-primary mt-1"></div>
-</div>
-</div>
-</div>
-<div class="z-10 flex items-end justify-between">
-<h1 class="vertical-text font-display text-8xl font-bold tracking-tighter text-slate-100 opacity-90 rotate-180" style="">
-                    LEADMIND
+    <div class="relative flex min-h-screen w-full flex-col lg:flex-row overflow-hidden">
+        <!-- Left Side: Military Grid Aesthetic -->
+        <div
+            class="relative hidden lg:flex w-1/2 flex-col justify-between bg-background-dark p-12 border-r border-primary/20 grid-pattern">
+            <div class="z-10">
+                <div class="flex items-center gap-3">
+                    <span class="text-primary material-symbols-outlined" style="font-size: 32px;">grid_view</span>
+                    <div class="flex flex-col">
+                        <span class="font-mono text-[10px] tracking-widest text-primary uppercase" style="">Auth
+                            Protocol</span>
+                        <div class="h-[1px] w-12 bg-primary mt-1"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="z-10 flex items-end justify-between">
+                <h1 class="vertical-text font-display text-8xl font-bold tracking-tighter text-slate-100 opacity-90 rotate-180"
+                    style="">
+                    LeadMind
                 </h1>
-<div class="flex flex-col items-end gap-2">
-<p class="font-mono text-xs text-slate-400 uppercase tracking-[0.3em]" style="">Status: Operational</p>
-<p class="font-mono text-xs text-primary font-bold" style="">SYSTEM V4.0.1</p>
-</div>
-</div>
-<!-- Decorative corner elements -->
-<div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-primary/30"></div>
-<div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-primary/30"></div>
-<div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-primary/30"></div>
-<div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-primary/30"></div>
-</div>
-<!-- Right Side: Sign-In Form (Mobile view defaults here) -->
-<div class="flex flex-1 flex-col justify-center bg-background-light dark:bg-slate-50 px-6 py-12 sm:px-12 lg:px-20">
-<!-- Mobile Header Only -->
-<div class="lg:hidden mb-8 flex items-center justify-between border-b border-slate-200 pb-4">
-<div class="flex flex-col">
-<span class="font-mono text-[10px] text-primary font-bold tracking-widest" style="">USER LOGIN</span>
-<h2 class="font-display text-xl font-bold text-slate-900 uppercase" style="">LeadMind</h2>
-</div>
-<span class="material-symbols-outlined text-slate-900" style="">shield</span>
-</div>
-<div class="mx-auto w-full max-w-sm">
-<div class="mb-10">
-<h3 class="font-display text-4xl font-bold tracking-tight text-slate-900" style="">Welcome Back</h3>
-<p class="mt-2 text-sm text-slate-500 font-mono" style="">Please sign in to access your dashboard</p>
-</div>
-<form class="space-y-6">
-<div>
-<label class="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-1" for="email" style="">
+                <div class="flex flex-col items-end gap-2">
+                    <p class="font-mono text-xs text-slate-400 uppercase tracking-[0.3em]" style="">Status: Operational
+                    </p>
+                    <p class="font-mono text-xs text-primary font-bold" style="">SYSTEM V4.0.1</p>
+                </div>
+            </div>
+            <!-- Decorative corner elements -->
+            <div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-primary/30"></div>
+            <div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-primary/30"></div>
+            <div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-primary/30"></div>
+            <div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-primary/30"></div>
+        </div>
+        <!-- Right Side: Sign-In Form (Mobile view defaults here) -->
+        <div
+            class="flex flex-1 flex-col justify-center bg-background-light dark:bg-slate-50 px-6 py-12 sm:px-12 lg:px-20">
+            <!-- Mobile Header Only -->
+            <div class="lg:hidden mb-8 flex items-center justify-between border-b border-slate-200 pb-4">
+                <div class="flex flex-col">
+                    <span class="font-mono text-[10px] text-primary font-bold tracking-widest" style="">SYSTEM
+                        V4.0.1</span>
+                    <h2 class="font-display text-xl font-bold text-slate-900 uppercase" style="">LeadMind</h2>
+                </div>
+                <span class="material-symbols-outlined text-slate-900" style="">shield</span>
+            </div>
+            <div class="mx-auto w-full max-w-sm">
+                <div class="mb-10">
+                    <h3 class="font-display text-4xl font-bold tracking-tight text-slate-900" style="">Welcome Back</h3>
+                    <!-- <p class="mt-2 text-sm text-slate-500 font-mono" style="">Secure Terminal Access Required</p> -->
+                </div>
+                <form class="space-y-6">
+                    <div>
+                        <label
+                            class="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-1"
+                            for="email" style="">
                             Official Business Email
                         </label>
-<div class="relative">
-<input autocomplete="email" class="block w-full border border-slate-900 bg-transparent px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-primary rounded-none font-body transition-all" id="email" name="email" placeholder="name@company.gov" required="" type="email">
-</div>
-</div>
-<div>
-<div class="flex items-center justify-between mb-1">
-<label class="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900" for="password" style="">
+                        <div class="relative">
+                            <input autocomplete="email"
+                                class="block w-full border border-slate-900 bg-transparent px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-primary rounded-none font-body transition-all"
+                                id="email" name="email" placeholder="name@company.gov" required="" type="email">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block font-mono text-[11px] font-bold uppercase tracking-wider text-slate-900"
+                                for="password" style="">
                                 Password
                             </label>
-</div>
-<div class="relative">
-<input autocomplete="current-password" class="block w-full border border-slate-900 bg-transparent px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-primary rounded-none font-body transition-all" id="password" name="password" placeholder="••••••••" required="" type="password">
-</div>
-</div>
-<div class="flex items-center justify-between">
-<div class="flex items-center">
-<input class="h-4 w-4 border-slate-900 text-primary focus:ring-primary rounded-none" id="remember-me" name="remember-me" type="checkbox">
-<label class="ml-2 block text-xs font-mono text-slate-700" for="remember-me" style="">Remember Station</label>
-</div>
-<a class="font-mono text-xs font-bold text-primary hover:underline underline-offset-4" href="#" style="">Forgot Password?</a>
-</div>
-<div>
-<button class="flex w-full justify-center bg-primary px-4 py-5 text-sm font-bold uppercase tracking-widest text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-none transition-colors" type="submit" style="">
+                        </div>
+                        <div class="relative">
+                            <input autocomplete="current-password"
+                                class="block w-full border border-slate-900 bg-transparent px-4 py-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-primary rounded-none font-body transition-all"
+                                id="password" name="password" placeholder="••••••••" required="" type="password">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <input class="h-4 w-4 border-slate-900 text-primary focus:ring-primary rounded-none"
+                                id="remember-me" name="remember-me" type="checkbox">
+                            <label class="ml-2 block text-xs font-mono text-slate-700" for="remember-me"
+                                style="">Remember Station</label>
+                        </div>
+                        <a class="font-mono text-xs font-bold text-primary hover:underline underline-offset-4" href="#"
+                            style="">Forgot Password?</a>
+                    </div>
+                    <div>
+                        <button
+                            class="flex w-full justify-center bg-primary px-4 py-5 text-sm font-bold uppercase tracking-widest text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-none transition-colors"
+                            type="submit" style="">
                             Sign In
                         </button>
-</div>
-</form>
-<div class="mt-12 text-center border-t border-slate-200 pt-8">
-<p class="font-mono text-xs text-slate-500" style="">
-                        Don't have an account? 
-                        <a class="font-bold text-slate-900 hover:text-primary transition-colors" href="#" style="">Sign up</a>
-</p>
-</div>
-<!-- Technical Footer for Form -->
-<div class="mt-16 flex flex-col items-center gap-2 opacity-30">
-<div class="h-px w-full bg-slate-200"></div>
-<div class="flex w-full justify-between font-mono text-[9px] text-slate-400 uppercase tracking-tighter">
-<span class="" style=""><br></span>
-<span class="" style=""><br></span>
-<span class="" style=""><br></span>
-</div>
-</div>
-</div>
-</div>
-</div>
-</body></html>
+                    </div>
+                </form>
+                <div class="mt-12 text-center border-t border-slate-200 pt-8">
+                    <p class="font-mono text-xs text-slate-500" style="">
+                        Don't have an account?
+                        <a class="font-bold text-slate-900 hover:text-primary transition-colors" href="#" style="">Sign
+                            up</a>
+                    </p>
+                </div>
+                <!-- Technical Footer for Form -->
+                <div class="mt-16 flex flex-col items-center gap-2 opacity-30">
+                    <div class="h-px w-full bg-slate-200"></div>
+                    <div
+                        class="flex w-full justify-between font-mono text-[9px] text-slate-400 uppercase tracking-tighter">
+                        <span class="" style=""><br></span>
+                        <span class="" style=""><br></span>
+                        <span class="" style=""><br></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

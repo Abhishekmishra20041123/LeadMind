@@ -43,10 +43,10 @@ class FollowUpTimingAgent:
         print(f"Loaded email logs shape: {self.email_logs.shape}")
         print(f"Email columns: {self.email_logs.columns.tolist()}")
     
-    def _validate_data(self, lead_id: str):
-        """Validate and prepare data for the workflow"""
+    def _validate_data(self, lead_id: str, mapping=None):
+        """Validate and prepare data using discovered mapping"""
         if self.email_logs is None:
-            raise ValueError("Must load data before processing")
+            return []
             
         # Filter for this lead
         lead_emails = self.email_logs[self.email_logs['lead_id'] == lead_id].copy()
@@ -65,7 +65,7 @@ class FollowUpTimingAgent:
             
         return emails_list
     
-    def process_task(self, lead_id: str) -> Dict[str, Any]:
+    def process_task(self, lead_id: str, current_visit_time: str = None, **kwargs) -> Dict[str, Any]:
         """Process follow-up timing for a lead"""
         print("\n=== Processing Follow-up Timing Task ===")
         
@@ -76,8 +76,13 @@ class FollowUpTimingAgent:
             
             # Step 2: Prepare initial state
             initial_state = {
-                "lead_id": lead_id,
-                "email_logs": emails_list,
+                "lead": {
+                    "lead_id": lead_id,
+                    "industry": "Jewelry"
+                },
+                "email_history": emails_list,
+                "current_visit_time": current_visit_time,
+                "visit_frequency": kwargs.get("visit_frequency", 1),
                 "llm": self.llm,
                 "prompt_templates": followup_timing_prompts
             }

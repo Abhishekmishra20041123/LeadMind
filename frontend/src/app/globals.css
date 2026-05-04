@@ -14,10 +14,28 @@
 
 ::-webkit-scrollbar-thumb {
     background: #0A0A0A;
+    border: 2px solid #F0F0F0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: #f93706;
+}
+
+/* Glass effect */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(10, 10, 10, 0.1);
+}
+
+.dark .glass-effect {
+    background: rgba(10, 10, 10, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.transition-premium {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Grid lines pattern */
@@ -50,4 +68,13 @@
         linear-gradient(to right, rgba(255, 255, 255, 0.138) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.123) 1px, transparent 1px);
     animation: grid-scroll 3s linear infinite;
+}
+
+@keyframes progress-shrink {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+.animate-progress-shrink {
+    animation: progress-shrink 3s linear forwards;
 }

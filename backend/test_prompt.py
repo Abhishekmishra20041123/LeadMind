@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from prompts.email_strategy_prompts import email_strategy_prompts
 from api.agents import OllamaWrapper
 
-llm = OllamaWrapper('minimax-m2.5:cloud')
+llm = OllamaWrapper()
 
 prompt = email_strategy_prompts["craft_email"]
 prompt = prompt.replace("{lead}", '{"company": "TechCorp"}')

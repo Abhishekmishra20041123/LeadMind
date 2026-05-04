@@ -10,6 +10,8 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState("PROFILE");
     const [toastMessage, setToastMessage] = useState(null);
+    const [apiKeys, setApiKeys] = useState([]);
+    const [generatingKey, setGeneratingKey] = useState(false);
 
     // Auth Modal State
     const [isUnlocked, setIsUnlocked] = useState(false);
@@ -33,7 +35,11 @@ export default function SettingsPage() {
         api_key: "",
         settings: {
             smtp_user: "",
-            smtp_pass: ""
+            smtp_pass: "",
+            twilio_account_sid: "",
+            twilio_auth_token: "",
+            twilio_phone_number: "",
+            twilio_whatsapp_number: ""
         }
     });
 
@@ -61,7 +67,11 @@ export default function SettingsPage() {
                         api_key: data.api_key || "",
                         settings: {
                             smtp_user: data.settings?.smtp_user || "",
-                            smtp_pass: data.settings?.smtp_pass || ""
+                            smtp_pass: data.settings?.smtp_pass || "",
+                            twilio_account_sid: data.settings?.twilio_account_sid || "",
+                            twilio_auth_token: data.settings?.twilio_auth_token || "",
+                            twilio_phone_number: data.settings?.twilio_phone_number || "",
+                            twilio_whatsapp_number: data.settings?.twilio_whatsapp_number || ""
                         }
                     });
                 }
@@ -71,7 +81,23 @@ export default function SettingsPage() {
                 setLoading(false);
             }
         };
+
+        const fetchApiKeys = async () => {
+            try {
+                const res = await fetch(`${API}/api-keys/list`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("access_token")}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setApiKeys(data.keys);
+                }
+            } catch (e) {
+                console.error("Failed to load API keys", e);
+            }
+        };
+
         fetchProfile();
+        fetchApiKeys();
     }, []);
 
     const showToast = (message, isError = false) => {
@@ -167,6 +193,31 @@ export default function SettingsPage() {
         }
     };
 
+    const handleGenerateApiKey = async () => {
+        setGeneratingKey(true);
+        try {
+            const res = await fetch(`${API}/api-keys/generate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("access_token")}`
+                },
+                body: JSON.stringify({ name: "Production Tracking SDK" })
+            });
+            if (res.ok) {
+                const newKey = await res.json();
+                setApiKeys(prev => [newKey, ...prev]);
+                showToast("NEW API KEY GENERATED SUCCESSFULLY.");
+            } else {
+                showToast("FAILED TO GENERATE API KEY.", true);
+            }
+        } catch (error) {
+            showToast(`ERROR: ${error.message}`, true);
+        } finally {
+            setGeneratingKey(false);
+        }
+    };
+
     if (loading) return (
         <DashboardLayout>
             <div className="flex h-full items-center justify-center bg-paper text-ink font-mono uppercase tracking-widest animate-pulse">
@@ -249,7 +300,7 @@ export default function SettingsPage() {
         return name.substring(0, 2).toUpperCase();
     };
 
-    const tabs = ["PROFILE", "CONTACTS", "SECURITY", "INTEGRATIONS"];
+    const tabs = ["PROFILE", "CONTACTS", "SECURITY", "INTEGRATIONS", "TWILIO"];
 
     const InputField = ({ label, name, type = "text", value, placeholder, isReadOnly = false }) => (
         <div className="flex flex-col gap-2">
@@ -305,7 +356,7 @@ export default function SettingsPage() {
                     {/* HEADER */}
                     <header className="px-8 py-8 border-b-2 border-ink bg-paper z-10">
                         <div className="flex flex-col gap-2">
-                            <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration // v2.4.0</span>
+                            <span className="font-mono text-[10px] text-ink/60 uppercase tracking-widest">System Configuration </span>
                             <h1 className="font-display font-bold text-4xl tracking-tight text-ink uppercase">Settings</h1>
                         </div>
                     </header>
@@ -424,6 +475,110 @@ export default function SettingsPage() {
                                 {/* ── INTEGRATIONS ── */}
                                 {activeTab === "INTEGRATIONS" && (
                                     <div className="space-y-12">
+                                        {/* Tracking SDK */}
+                                        <div className="pt-8 border-t-2 border-ink/10">
+                                            <div className="flex items-center justify-between mb-8">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-primary flex items-center justify-center border-2 border-ink shadow-[2px_2px_0px_0px_rgba(10,10,10,1)]">
+                                                        <span className="material-symbols-outlined text-paper text-sm">code</span>
+                                                    </div>
+                                                    <div>
+                                                        <h2 className="font-mono font-bold text-xl uppercase tracking-widest text-ink">LeadMind SDK Setup</h2>
+                                                        <p className="font-mono text-[10px] text-ink/50 uppercase tracking-widest mt-0.5">Live Visitor Behavioral Tracking</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-6 mb-10">
+                                                <div className="flex flex-col gap-4">
+                                                    <div className="flex justify-between items-end">
+                                                        <label className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-ink/70 tracking-widest">
+                                                            <span className="material-symbols-outlined text-sm text-ink/40">key</span>
+                                                            Active Tracking Keys
+                                                        </label>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleGenerateApiKey}
+                                                            disabled={generatingKey}
+                                                            className="text-[10px] font-mono font-bold uppercase tracking-widest bg-ink text-paper px-4 py-2 hover:bg-primary transition-colors disabled:opacity-50">
+                                                            {generatingKey ? "GENERATING..." : "+ GENERATE NEW KEY"}
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    {apiKeys.length === 0 ? (
+                                                        <div className="p-4 border-2 border-dashed border-red-500/50 bg-red-50 text-red-500 font-mono text-xs uppercase tracking-widest text-center">
+                                                            NO ACTIVE KEYS. GENERATE ONE TO INSTALL TRACKER.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            {apiKeys.map(k => (
+                                                                <div key={k.key || k.key_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-2 border-ink bg-mute/30">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-mono text-xs text-ink/60 uppercase">{k.name}</span>
+                                                                        <span className="font-mono font-bold text-sm text-ink tracking-tight select-all">{k.key}</span>
+                                                                    </div>
+                                                                    <span className="px-2 py-1 bg-data-green/20 text-data-green text-[10px] font-bold uppercase  mt-2 sm:mt-0 font-mono">ACTIVE</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* SDK Guide */}
+                                            {apiKeys.length > 0 && (
+                                                <div className="border-2 border-ink overflow-hidden shadow-[6px_6px_0px_0px_rgba(10,10,10,1)]">
+                                                    <div className="bg-ink px-6 py-4 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="material-symbols-outlined text-primary text-lg">integration_instructions</span>
+                                                            <span className="font-mono text-sm font-bold uppercase tracking-widest text-paper">Installation Snippets</span>
+                                                        </div>
+                                                        <span className="px-3 py-1 bg-primary/20 border border-primary/40 font-mono text-[10px] font-bold uppercase tracking-widest text-primary">Copy & Paste</span>
+                                                    </div>
+                                                    <div className="p-6 bg-[#111] text-paper">
+                                                        <p className="font-mono text-xs text-paper/60 uppercase hover:text-paper transition-colors mb-6 leading-relaxed">
+                                                            Copy the correct snippet for your framework and paste it into your global layout or index file. <span className="text-primary font-bold">Replace the API Key with the one generated above.</span>
+                                                        </p>
+                                                        
+                                                        <div className="space-y-6">
+                                                            <div>
+                                                                <p className="font-mono text-[10px] text-primary uppercase font-bold tracking-widest mb-2 border-b border-primary/20 pb-1">For Next.js / React (Safe Install)</p>
+                                                                
+                                                                <div className="mb-4">
+                                                                    <p className="font-mono text-[10px] text-paper/60 uppercase tracking-wide mb-2"><span className="text-primary font-bold">Step 1:</span> Add this import at the top of layout.tsx:</p>
+                                                                    <pre className="p-3 bg-[#0a0a0a] border-l-2 border-primary overflow-x-auto scroller-hide text-xs font-mono text-paper/80 select-all leading-relaxed">
+{`import Script from "next/script";`}</pre>
+                                                                </div>
+
+                                                                <div>
+                                                                    <p className="font-mono text-[10px] text-paper/60 uppercase tracking-wide mb-2"><span className="text-primary font-bold">Step 2:</span> Paste this inside your EXISTING <span className="text-paper">&lt;body&gt;</span> tag:</p>
+                                                                    <pre className="p-3 bg-[#0a0a0a] border-l-2 border-primary overflow-x-auto scroller-hide text-xs font-mono text-paper/80 select-all leading-relaxed">
+{`<Script
+  id="leadmind-tracker"
+  src="${API.replace('/api', '')}/public/sdk/leadmind-tracker.js"
+  data-api-key="YOUR_GENERATED_API_KEY_HERE"
+  data-api-host="${API.replace('/api', '')}"
+  strategy="afterInteractive"
+/>`}</pre>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div>
+                                                                <p className="font-mono text-[10px] text-data-purple uppercase font-bold tracking-widest mb-2 border-b border-data-purple/20 pb-1">For HTML / WordPress / Shopify (Paste in &lt;head&gt;)</p>
+                                                                <pre className="p-4 bg-[#0a0a0a] border-l-2 border-data-purple overflow-x-auto scroller-hide text-xs font-mono text-paper/80 select-all leading-relaxed">
+{`<script
+  src="${API.replace('/api', '')}/public/sdk/leadmind-tracker.js"
+  data-api-key="YOUR_GENERATED_API_KEY_HERE"
+  data-api-host="${API.replace('/api', '')}"
+  async>
+</script>`}</pre>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* SMTP Gateway */}
                                         <div className="pt-8 border-t-2 border-ink/10">
                                             {/* Section header */}
@@ -514,7 +669,71 @@ export default function SettingsPage() {
                                     </div>
                                 )}
 
-                                {/* GLOBAL SAVE BAR */}
+                                {/* ── TWILIO ── */}
+                                {activeTab === "TWILIO" && (
+                                    <div className="space-y-10">
+                                        <div className="flex items-center gap-3 pb-6 border-b-2 border-ink/10">
+                                            <div className="w-8 h-8 bg-red-500 flex items-center justify-center">
+                                                <span className="material-symbols-outlined text-paper text-sm">phone</span>
+                                            </div>
+                                            <div>
+                                                <h2 className="font-mono font-bold text-xl uppercase tracking-widest text-ink">Twilio Integration</h2>
+                                                <p className="font-mono text-[10px] text-ink/50 uppercase tracking-widest mt-0.5">SMS · WhatsApp · Voice Outreach</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-5 border-2 border-amber-400 bg-amber-50">
+                                            <p className="font-mono text-xs text-amber-800 uppercase tracking-wide leading-relaxed">
+                                                <span className="font-bold">Required:</span> Sign up at{" "}
+                                                <a href="https://www.twilio.com" target="_blank" rel="noopener noreferrer" className="underline text-amber-700 hover:text-amber-900">twilio.com</a> → get Account SID, Auth Token, and a phone number. Enable SMS + WhatsApp + Voice capabilities.
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">Account SID</label>
+                                                <input type="text" name="settings.twilio_account_sid" value={formData.settings.twilio_account_sid || ""} onChange={handleInputChange}
+                                                    placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                                    className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">Auth Token</label>
+                                                <input type="password" name="settings.twilio_auth_token" value={formData.settings.twilio_auth_token || ""} onChange={handleInputChange}
+                                                    placeholder="Your Twilio Auth Token"
+                                                    className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">SMS / Voice Phone Number (E.164)</label>
+                                                <input type="text" name="settings.twilio_phone_number" value={formData.settings.twilio_phone_number || ""} onChange={handleInputChange}
+                                                    placeholder="+15551234567"
+                                                    className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                                <p className="font-mono text-[10px] text-ink/40 uppercase tracking-wide">Format: +[country code][number] — no spaces</p>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-xs font-mono font-bold uppercase text-ink/80 tracking-widest">WhatsApp Sender (Full form)</label>
+                                                <input type="text" name="settings.twilio_whatsapp_number" value={formData.settings.twilio_whatsapp_number || ""} onChange={handleInputChange}
+                                                    placeholder="whatsapp:+14155238886"
+                                                    className="w-full px-4 py-3 border-2 border-ink bg-mute text-ink font-mono text-sm focus:outline-none focus:border-primary focus:bg-white transition-colors" />
+                                                <p className="font-mono text-[10px] text-ink/40 uppercase tracking-wide">Use Twilio sandbox number for testing</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                                            {[
+                                                { icon: "sms",   title: "SMS Outreach",     desc: "Send personalized SMS to any lead with a phone number." },
+                                                { icon: "chat",  title: "WhatsApp Messages", desc: "Rich WhatsApp messages via Twilio Business API." },
+                                                { icon: "call",  title: "Voice Calls",       desc: "Automated outbound calls with AI-generated scripts." },
+                                            ].map(f => (
+                                                <div key={f.title} className="p-5 border-2 border-ink bg-mute/10">
+                                                    <span className="material-symbols-outlined text-2xl text-ink/50 mb-3 block">{f.icon}</span>
+                                                    <p className="font-mono text-xs font-bold uppercase text-ink mb-1">{f.title}</p>
+                                                    <p className="font-mono text-[10px] text-ink/50 leading-relaxed">{f.desc}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="mt-12 pt-8 border-t-2 border-ink flex justify-end">
                                     <button
                                         type="submit"

@@ -12,11 +12,26 @@ export default function DashboardLayout({ children }) {
     const token = localStorage.getItem("access_token");
     if (!token) {
       router.replace("/login");
-    } else {
-      setTimeout(() => {
-          setIsAuthorized(true);
-      }, 0);
+      return;
     }
+
+    // Verify token with backend
+    fetch("http://localhost:8000/api/auth/me", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+    .then(res => {
+      if (res.status === 401) {
+        localStorage.removeItem("access_token");
+        router.replace("/login");
+      } else {
+        setIsAuthorized(true);
+      }
+    })
+    .catch(() => {
+      // In case of network error, we might want to still show the UI if it's just a temporary glitch
+      // but for security/correctness, we'll keep it as is.
+      setIsAuthorized(true); 
+    });
   }, [router]);
 
   if (!isAuthorized) {

@@ -54,6 +54,7 @@ def generate_strategy(state: Dict[str, Any], llm=None, prompt_templates=None) ->
     context = {
         "lead_id": lead.get("lead_id"),
         "industry": lead.get("industry"),
+        "current_visit_time": state.get("current_visit_time"),
         "total_past_emails": total_emails,
         "historical_replies": replies,
         "response_rate": response_rate,

@@ -1,0 +1,9 @@
+student_id,student_name,course_views,study_minutes,modules_completed,interested_courses
+ST_001,Charlie,15,120,8,"https://edustream.io/system-design,https://edustream.io/python-expert"
+ST_002,Emily,12,95,6,"https://edustream.io/data-science,https://edustream.io/web-development"
+ST_003,Michael,18,150,10,"https://edustream.io/ai-machine-learning,https://edustream.io/cloud-computing"
+ST_004,Sarah,8,60,4,"https://edustream.io/digital-marketing,https://edustream.io/ux-design"
+ST_005,David,22,180,12,"https://edustream.io/full-stack-mastery,https://edustream.io/blockchain"
+ST_006,Lisa,6,45,3,"https://edustream.io/mobile-development,https://edustream.io/cybersecurity"
+ST_007,James,14,110,9,"https://edustream.io/python-expert,https://edustream.io/react-framework"
+ST_008,Jessica,9,72,5,"https://edustream.io/data-analytics,https://edustream.io/seo-optimization"

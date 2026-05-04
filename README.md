@@ -95,10 +95,10 @@ Click the link below to watch LeadMind in action:
 ---
 
 ## ⚙️ Tech Stack
-- **Backend**: FastAPI, LangGraph, Motor (Async MongoDB), BeautifulSoup4
+- **Backend**: FastAPI, LangGraph, Motor (Async MongoDB), BeautifulSoup4,MicroLink,PlayWright,Chromium
 - **Frontend**: Next.js 14, TailwindCSS, Lucide-React
 - **Database**: MongoDB Atlas
-- **Orchestration**: LangChain, OpenAI GPT-4o
+- **Orchestration**: LangChain, OLLAMA
 - **Connectivity**: Twilio, SMTP, Cloudflare Tunnels
 
 ---

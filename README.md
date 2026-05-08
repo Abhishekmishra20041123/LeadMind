@@ -20,7 +20,7 @@ The executive command center for your sales operation. It visualizes core KPIs i
 ![Dashboard](./assets/Dashboard.png)
 
 ### 2. The Lead Ledger (Unified Intelligence)
-A high-density, low-latency data grid designed for rapid lead management. It provides a single-pane-of-glass view into enriched firmographics, validated social links, and AI-summarized company intelligence, allowing for instant filtering by "Hot" status.
+A high-density, low-latency data grid designed for rapid lead management. It provides a single-pane-of-glass view into enriched firmographics, validated social links, and AI-summarized company intelligence, allowing for instant filtering by "completed" and "dispatched" status.
 ![The Ledger](./assets/Leadger.png)
 
 ### 3. Agent Monitor (Neural Pipeline Trace)

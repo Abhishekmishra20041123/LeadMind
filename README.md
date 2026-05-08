@@ -49,7 +49,7 @@ Harness the power of the world’s most active messaging platform. LeadMind draf
 ![WhatsApp Outreach](./assets/LeadPage4.png)
 
 ### 📞 AI Voice & Virtual Call Assistant
-When a lead hits a critical "Hot" threshold, the system can trigger an AI-driven Voice Assistant to execute automated follow-up calls or personalized voice-mail drops, bridging the gap between digital and verbal engagement.
+When a lead completed its pipeline processing, the system can trigger an AI-driven Voice Assistant to execute automated **AI CALL ASSISTANT**, bridging the gap between digital and verbal engagement.
 ![AI Voice Assistant](./assets/LeadPage5.png)
 
 ### 📝 CRM Performance Audit & Logger
@@ -69,7 +69,7 @@ A visual deals board that manages the lifecycle of a lead. The AI automatically 
 ![Pipeline](./assets/Pipeline.png)
 
 ### High-Fidelity Multi-Channel Designer
-Create and test dynamic templates that adapt their content fragments based on the AI's research. Preview exactly how your personalization will appear across Email, SMS, and LinkedIn.
+Create and test dynamic templates that adapt their content fragments based on the AI's research. Preview exactly how your personalization will appear across Email, SMS,Whatsapp and AI Caller.
 ![Designer](./assets/Designer.png)
 
 ### Strategic Task Board

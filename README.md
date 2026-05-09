@@ -94,12 +94,42 @@ Click the link below to watch LeadMind in action:
 
 ---
 
-## ⚙️ Tech Stack
-- **Backend**: FastAPI, LangGraph, Motor (Async MongoDB), BeautifulSoup4,MicroLink,PlayWright,Chromium
-- **Frontend**: Next.js 14, TailwindCSS, Lucide-React
-- **Database**: MongoDB Atlas
-- **Orchestration**: LangChain, OLLAMA
-- **Connectivity**: Twilio, SMTP, Cloudflare Tunnels
+# 🚀 Tech Stack
+
+## ⚙️ Backend
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green?style=for-the-badge&logo=fastapi)
+![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Orchestration-purple?style=for-the-badge)
+![Motor](https://img.shields.io/badge/Motor-Async_MongoDB-darkgreen?style=for-the-badge)
+![BeautifulSoup4](https://img.shields.io/badge/BeautifulSoup4-Web_Scraping-brightgreen?style=for-the-badge)
+![MicroLink](https://img.shields.io/badge/MicroLink-Link_Previews-blueviolet?style=for-the-badge)
+![Playwright](https://img.shields.io/badge/Playwright-Browser_Automation-45ba4b?style=for-the-badge&logo=playwright)
+![Chromium](https://img.shields.io/badge/Chromium-Headless_Browser-blue?style=for-the-badge&logo=googlechrome)
+
+---
+
+## 🎨 Frontend
+![Next.js](https://img.shields.io/badge/Next.js_14-Frontend-black?style=for-the-badge&logo=next.js)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Styling-38bdf8?style=for-the-badge&logo=tailwindcss)
+![Lucide](https://img.shields.io/badge/Lucide_React-Icons-f56565?style=for-the-badge)
+
+---
+
+## 🗄️ Database
+![MongoDB Atlas](https://img.shields.io/badge/MongoDB_Atlas-Database-00ed64?style=for-the-badge&logo=mongodb)
+
+---
+
+## 🤖 AI / Orchestration
+![LangChain](https://img.shields.io/badge/LangChain-LLM_Framework-green?style=for-the-badge)
+![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Flows-purple?style=for-the-badge)
+![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-black?style=for-the-badge)
+
+---
+
+## 🌐 Connectivity & Services
+![Twilio](https://img.shields.io/badge/Twilio-Communication-f22f46?style=for-the-badge&logo=twilio)
+![SMTP](https://img.shields.io/badge/SMTP-Email_Service-orange?style=for-the-badge)
+![Cloudflare](https://img.shields.io/badge/Cloudflare_Tunnels-Secure_Tunneling-f38020?style=for-the-badge&logo=cloudflare)
 
 ---
 *Built with ❤️ by the LeadMind Team.*
